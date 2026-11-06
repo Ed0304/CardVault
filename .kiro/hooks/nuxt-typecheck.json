@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Nuxt TypeScript Check",
+      "trigger": "PostFileSave",
+      "description": "Run Nuxt TypeScript type check when a .vue or .ts file in the frontend changes",
+      "matcher": "frontend/cardvault/.*\\.(vue|ts)$",
+      "action": {
+        "type": "command",
+        "command": "cd \"d:\\Projects\\Kiro Hackathon Project\\frontend\\cardvault\" && npx nuxi typecheck 2>&1 | tail -20",
+        "timeout": 60
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "CardVault Session Context",
+      "trigger": "SessionStart",
+      "description": "Inject CardVault project context at session start",
+      "action": {
+        "type": "agent",
+        "prompt": "This is a CardVault hackathon project using Nuxt 4 (Vue 3.5 + TypeScript) for the frontend, Express.js v5 for the Node backend, and FastAPI (Python) for the Python backend. Always follow these conventions:\n- Vue components: use `<script setup lang=\"ts\">` with Composition API\n- Express routes: organise under `backend/expressjs/routes/` using `express.Router()`\n- FastAPI: use Pydantic models and `APIRouter`, type-annotate all functions\n- API responses: `{ data, error, message }` shape\n- CORS must be enabled on backends for localhost:3000\nKeep responses focused on the hackathon scope — prefer working demos over complex abstractions."
+      }
+    }
+  ]
+}

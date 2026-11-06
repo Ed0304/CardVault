@@ -1,0 +1,41 @@
+# Node.js
+**/node_modules/
+**/npm-debug.log*
+
+# Nuxt
+**/.nuxt/
+**/.output/
+**/.nitro/
+**/dist/
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Environment variables
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs
+**/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+
+# Temporary files
+**/tmp/
+**/temp/
+
+# IMPORTANT:
+# Do not ignore .kiro/

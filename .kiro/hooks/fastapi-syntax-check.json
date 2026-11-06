@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "FastAPI Python Syntax Check",
+      "trigger": "PostFileSave",
+      "description": "Check Python syntax on FastAPI files when they are saved",
+      "matcher": "backend/fastapi/.*\\.py$",
+      "action": {
+        "type": "command",
+        "command": "cd \"d:\\Projects\\Kiro Hackathon Project\\backend\\fastapi\" && python -m py_compile app.py routers/*.py models/*.py services/*.py core/*.py 2>&1 && echo \"Python syntax OK\"",
+        "timeout": 30
+      }
+    }
+  ]
+}

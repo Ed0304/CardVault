@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Express TypeScript Check",
+      "trigger": "PostFileSave",
+      "description": "Run TypeScript type check on Express backend when a .ts file changes",
+      "matcher": "backend/expressjs/src/.*\\.ts$",
+      "action": {
+        "type": "command",
+        "command": "cd \"d:\\Projects\\Kiro Hackathon Project\\backend\\expressjs\" && npx tsc --noEmit 2>&1 | tail -20",
+        "timeout": 60
+      }
+    }
+  ]
+}
