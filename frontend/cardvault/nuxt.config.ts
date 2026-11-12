@@ -6,6 +6,13 @@ export default defineNuxtConfig({
   // Global design tokens and base styles
   css: ['~/assets/css/main.css'],
 
+  // Express API base URL. Override with NUXT_PUBLIC_API_BASE.
+  runtimeConfig: {
+    public: {
+      apiBase: 'http://localhost:5000/api',
+    },
+  },
+
   app: {
     head: {
       htmlAttrs: { lang: 'en' },

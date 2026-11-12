@@ -43,7 +43,7 @@ watch(
 
       <div class="site-header__actions">
         <template v-if="isAuthenticated">
-          <span class="site-header__user">{{ user?.displayName ?? user?.email }}</span>
+          <span class="site-header__user">{{ user?.username ?? user?.email }}</span>
           <CommonAppButton variant="ghost" size="sm" @click="logout">Log out</CommonAppButton>
         </template>
         <template v-else>

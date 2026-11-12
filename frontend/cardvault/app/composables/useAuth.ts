@@ -14,11 +14,11 @@ export const useAuth = () => {
   }
 
   const login = async (payload: LoginPayload) => {
-    setUser(await authService.login(payload))
+    setUser((await authService.login(payload)).user)
   }
 
   const register = async (payload: RegisterPayload) => {
-    setUser(await authService.register(payload))
+    setUser((await authService.register(payload)).user)
   }
 
   const logout = async () => {

@@ -1,7 +1,6 @@
-import app from "./app.ts"
+import app from "./app.js";
+import { config } from "./lib/config.js";
 
-const port = process.env.port || 5000;
-
-app.listen(port, () => {
-    console.log("CardVault Server Running!")
-})
+app.listen(config.port, () => {
+    console.log(`CardVault Server Running on port ${config.port}`);
+});

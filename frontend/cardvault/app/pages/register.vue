@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { getApiErrorMessage } from '~/services/api'
+
 definePageMeta({ layout: 'auth' })
 
 const { register } = useAuth()
 
-const displayName = ref('')
+const username = ref('')
 const email = ref('')
 const password = ref('')
 const error = ref<string | null>(null)
@@ -14,13 +16,16 @@ const onSubmit = async () => {
   error.value = null
   try {
     await register({
+      username: username.value.trim(),
       email: email.value,
       password: password.value,
-      displayName: displayName.value || undefined,
     })
     await navigateTo('/catalog')
-  } catch {
-    error.value = 'Could not create the account. Check your details and try again.'
+  } catch (err) {
+    error.value = getApiErrorMessage(
+      err,
+      'Could not create the account. Check your details and try again.',
+    )
   } finally {
     isSubmitting.value = false
   }
@@ -36,7 +41,16 @@ const onSubmit = async () => {
 
     <CommonAppAlert v-if="error">{{ error }}</CommonAppAlert>
 
-    <CommonAppInput v-model="displayName" label="Name" optional autocomplete="name" />
+    <CommonAppInput
+      v-model="username"
+      label="Username"
+      required
+      minlength="3"
+      maxlength="100"
+      pattern="[A-Za-z0-9_.\-]+"
+      autocomplete="username"
+      hint="3 to 100 characters: letters, numbers, dots, hyphens and underscores."
+    />
     <CommonAppInput
       v-model="email"
       label="Email"
