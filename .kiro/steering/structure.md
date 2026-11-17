@@ -24,66 +24,75 @@ inclusion: always
 ```
 frontend/cardvault/
 ├── app/
-│   ├── app.vue                    # Root app component
-│   ├── pages/                     # File-based routing (Nuxt)
-│   │   ├── index.vue              # Dashboard / card list
-│   │   ├── auth/
-│   │   │   ├── login.vue
-│   │   │   └── register.vue
-│   │   └── cards/
-│   │       ├── new.vue
-│   │       └── [id].vue
-│   ├── components/                # Reusable Vue components
-│   │   ├── card/                  # Card-specific components
-│   │   ├── layout/                # Navigation, header, sidebar
-│   │   └── ui/                    # Generic UI primitives
-│   ├── composables/               # Shared reactive logic
-│   │   ├── useAuth.ts
-│   │   ├── useCards.ts
-│   │   └── useSearch.ts
-│   ├── layouts/
-│   │   ├── default.vue            # Authenticated app layout
-│   │   └── auth.vue               # Unauthenticated layout
-│   └── middleware/
-│       └── auth.ts                # Route guard
+│   ├── app.vue
+│   ├── pages/             # index.vue, login.vue, register.vue,
+│   │                      # catalog/{index,create,[id]}.vue, collections/index.vue
+│   ├── components/        # ai/, catalog/, collections/, common/
+│   ├── composables/       # useAuth.ts, useCatalog.ts, useSearch.ts
+│   ├── layouts/           # auth.vue, default.vue, landing.vue
+│   ├── plugins/           # auth.ts (restores the session via GET /api/auth/me)
+│   ├── services/          # api.ts, auth.service.ts, catalog.service.ts, search.service.ts
+│   ├── stores/            # auth.store.ts
+│   ├── types/, utils/, assets/
+│   └── (not yet created) middleware/auth.ts   # route guard
 ├── public/
 ├── nuxt.config.ts
 ├── tsconfig.json
 └── package.json
 ```
 
+Specs refer to these files by their real paths: card pages are `pages/catalog/{index,create,[id]}.vue`, the composable is `useCatalog.ts`, catalog components are in `components/catalog/`, AI components in `components/ai/`, and generic UI primitives in `components/common/` (there is no `ui/` or `card/` folder). `pages/index.vue` is the landing page, not the card list. Components that do not exist yet go in the same folders: `components/catalog/NotesEditor.vue`, `components/catalog/RelatedCards.vue`, `components/common/ConfirmDialog.vue`, `components/ai/AiMetadataEditor.vue`.
+
 ## Express Backend — `backend/expressjs/`
 
 ```
 backend/expressjs/
 ├── src/
-│   ├── index.ts                   # Server entry — sets up middleware and mounts routers
+│   ├── server.ts                  # Starts the HTTP server
+│   ├── app.ts                     # Builds the Express app: helmet, cors, json, cookie-parser, routers, error handlers
 │   ├── routes/
-│   │   ├── auth.ts                # POST /auth/register, /auth/login, /auth/logout
-│   │   ├── cards.ts               # CRUD /cards
-│   │   ├── collections.ts         # CRUD /collections
-│   │   ├── tags.ts                # /tags
-│   │   └── search.ts              # GET /search
+│   │   ├── auth.routes.ts         # /api/auth: register, login, logout, me
+│   │   └── (planned) cards.routes.ts, collections.routes.ts, tags.routes.ts, search.routes.ts
+│   ├── controllers/
+│   │   ├── authController.ts      # HTTP in/out; calls services
+│   │   └── (planned) cardController.ts, collectionController.ts, tagController.ts
 │   ├── middleware/
-│   │   ├── authenticate.ts        # Session/token verification
-│   │   ├── errorHandler.ts        # Global error handler
+│   │   ├── authenticate.ts        # Verifies JWT (Bearer header or cv_token cookie), sets req.user.id
+│   │   ├── errorHandler.ts        # notFoundHandler + global error handler
 │   │   └── validateBody.ts        # Zod validation wrapper
 │   ├── services/
 │   │   ├── authService.ts
-│   │   ├── cardService.ts
-│   │   ├── aiService.ts           # HTTP client to FastAPI
-│   │   └── urlIngestionService.ts
-│   ├── schemas/                   # Zod request validation schemas
+│   │   ├── userService.ts         # SQL for the users table
+│   │   └── (planned) cardService.ts, collectionService.ts, tagService.ts, aiService.ts, urlIngestionService.ts, searchService.ts
+│   │       (aiService.ts calls FastAPI only, never the AI provider; searchService.ts runs pgvector queries via the pg pool)
+│   ├── schemas/
+│   │   ├── auth.schemas.ts        # Zod request schemas
+│   │   └── (planned) cards.schemas.ts, collections.schemas.ts, tags.schemas.ts, search.schemas.ts
 │   ├── lib/
-│   │   └── prisma.ts              # Prisma client singleton
-│   └── types/                     # Shared TypeScript types
-├── prisma/
-│   └── schema.prisma              # Database schema
+│   │   ├── config.ts              # Validated environment variables (only place that reads process.env)
+│   │   ├── db.ts                  # pg Pool singleton
+│   │   ├── jwt.ts                 # Sign/verify access tokens (HS256)
+│   │   ├── cookies.ts             # Set/clear the auth cookie
+│   │   ├── password.ts            # Argon2id hash/verify
+│   │   ├── errors.ts              # AppError
+│   │   └── response.ts            # { data, error, message } envelope helpers
+│   └── types/
+│       └── express.d.ts           # Adds req.user
+├── migrations/                    # Idempotent SQL files, applied in filename order
+│   └── 001_create_users.sql
+├── scripts/
+│   └── migrate.ts                 # npm run migrate
+├── tests/                         # Jest + Supertest
+├── .env.example
+├── jest.config.js
 ├── package.json
-└── tsconfig.json
+├── tsconfig.json
+└── tsconfig.build.json
 ```
 
-## FastAPI Backend — `backend/fastapi/`
+## FastAPI Backend — `backend/fastapi/` (planned; intended provider: Meta Model API)
+
+Currently only an empty `app.py` exists. The layout below is the planned structure. Provider-specific code stays in `services/` and `core/config.py`. Optional image operations (Muse Image) are not designed yet and have no router or model here. FastAPI contains no similarity search and no database access; vector similarity is Express + PostgreSQL.
 
 ```
 backend/fastapi/
@@ -91,12 +100,10 @@ backend/fastapi/
 ├── routers/
 │   ├── catalog.py                 # POST /catalog — summarize, subjects, keywords
 │   ├── embeddings.py              # POST /embeddings — generate vector embedding
-│   ├── search.py                  # POST /search/similar — nearest-neighbour candidates
 │   └── health.py                  # GET /health
 ├── models/
 │   ├── catalog.py                 # Pydantic models for catalog requests/responses
-│   ├── embeddings.py              # Pydantic models for embedding requests/responses
-│   └── search.py                  # Pydantic models for search requests/responses
+│   └── embeddings.py              # Pydantic models for embedding requests/responses
 ├── services/
 │   ├── llm.py                     # LLM provider client (configurable)
 │   └── embedder.py                # Embedding provider client (configurable)
@@ -113,17 +120,17 @@ backend/fastapi/
 | TypeScript interfaces/types | PascalCase | `KnowledgeCard`, `UserSession` |
 | Vue components | PascalCase | `CardItem.vue`, `ConfirmDialog.vue` |
 | Vue pages | kebab-case filename | `new.vue`, `[id].vue` |
-| Nuxt composables | camelCase with `use` prefix | `useCards.ts` |
-| Express route files | camelCase | `cards.ts`, `authService.ts` |
+| Nuxt composables | camelCase with `use` prefix | `useCatalog.ts` |
+| Express files | `<name>.routes.ts`, `<name>Controller.ts`, `<name>Service.ts`, `<name>.schemas.ts` | `auth.routes.ts`, `authController.ts` |
 | Python modules/variables | snake_case | `card_service.py`, `user_id` |
 | Python classes/Pydantic models | PascalCase | `CatalogRequest`, `CardEmbedding` |
-| Database tables | snake_case (Prisma convention) | `knowledge_cards`, `user_collections` |
+| Database tables and columns | snake_case | `knowledge_cards`, `password_hash` |
 | Environment variables | SCREAMING_SNAKE_CASE | `DATABASE_URL`, `AI_API_KEY` |
 
 ## File Organization Rules
 
-- No business logic in route files — delegate to service functions.
-- No direct Prisma calls in routes — use service layer.
+- Request flow is route → controller → service → `pg` pool. No business logic in routes.
+- No SQL and no direct `pool` access in routes or controllers — only in `src/services/`.
 - No raw `fetch` in Vue components — use composables.
 - Zod schemas live in `src/schemas/` — not inline in route files.
 - Pydantic models live in `models/` — not inline in router files.

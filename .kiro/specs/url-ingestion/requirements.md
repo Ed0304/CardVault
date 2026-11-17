@@ -2,7 +2,7 @@
 
 ## Overview
 
-URL ingestion allows users to create a knowledge card by providing a public URL. CardVault fetches the page, extracts the readable text content and metadata, stores it as the immutable original source, and then triggers AI cataloging. Because URL fetching involves user-supplied input and outbound HTTP requests, security controls are mandatory.
+URL ingestion allows users to create a knowledge card by providing a public URL. CardVault fetches the page, extracts the readable text content and metadata, stores it as the immutable original source, and creates the card. AI cataloging of the new card is a separate, asynchronous step described in the AI Cataloging spec. It is not part of URL ingestion, and a successful ingestion does not depend on it. Because URL fetching involves user-supplied input and outbound HTTP requests, security controls are mandatory.
 
 ## Requirements
 
@@ -50,6 +50,16 @@ URL ingestion allows users to create a knowledge card by providing a public URL.
 ### REQ-URL-010: Untrusted Content Handling
 - Extracted webpage text must not be passed directly into privileged AI prompts without sanitization and delimiting.
 - See the AI Cataloging spec for prompt injection prevention requirements.
+
+### REQ-URL-011: Ingestion Lifecycle Independent of AI Cataloging
+- URL ingestion consists of: validating the URL, fetching the page, extracting and sanitizing the text, and creating the card with its immutable source layer. The request ends when the card is saved.
+- The request does not wait for AI processing. AI cataloging starts after the card is saved, as in REQ-AI-001, and uses the two independent AI statuses (catalog and embedding) defined in the AI Cataloging spec.
+- Ingestion succeeds or fails only on the ingestion rules (REQ-URL-001 to REQ-URL-009). A failed or unavailable AI operation never makes ingestion fail, and a successful ingestion never implies that AI processing succeeded.
+- Ingestion has no persisted status of its own: a request either returns the created card or returns an error. No ingestion status model is defined.
+- Acceptance criteria:
+  - AC-URL-011-1: A successful `POST /api/cards/from-url` returns the created card without waiting for any AI operation to finish.
+  - AC-URL-011-2: With no AI integration available, ingestion still succeeds and the card carries the AI statuses defined by REQ-AI-012.
+  - AC-URL-011-3: An AI failure after the card is saved leaves the card and its source layer unchanged.
 
 ## Out of Scope
 

@@ -16,8 +16,15 @@ Express — urlIngestionService
     └── 7. Return { sourceText, sourceUrl, sourceTitle, sourceMeta }
     │
     ▼
-cardService.createCard (stores immutable source, triggers AI)
+cardService.createCard (stores immutable source, returns the card)
+    │
+    ▼  after the response; not awaited, not part of ingestion
+AI processing: catalog generation and embedding generation, each with its own status
 ```
+
+## Ingestion Lifecycle
+
+Steps 1 to 7 above and `cardService.createCard` run inside the request. The request ends when the card is saved and returned. AI processing starts afterwards (see the AI Cataloging design) and is not awaited. Ingestion succeeds or fails only on the ingestion rules, so a failed AI operation never fails ingestion, and a successful ingestion says nothing about AI success. No ingestion status is persisted: the outcome is the created card or an error.
 
 ## API Endpoint
 
@@ -26,7 +33,7 @@ Request:
 ```json
 { "url": "https://example.com/article" }
 ```
-Response (201) — same shape as a regular card create response.
+Response (201) — same shape as a regular card create response. The AI statuses in it describe the state of AI processing at creation. They are not an outcome of ingestion.
 
 Error response (422):
 ```json
@@ -114,7 +121,7 @@ Sanitize `article.textContent` — strip any remaining HTML tags using a plain t
 ## Zod Validation Schema
 
 ```typescript
-// src/schemas/cards.ts
+// src/schemas/cards.schemas.ts
 export const createCardFromUrlSchema = z.object({
   url: z.string().url().max(2048),
 })
@@ -135,7 +142,7 @@ export const createCardFromUrlSchema = z.object({
 
 ## Frontend
 
-- `app/pages/cards/new.vue` includes a "From URL" tab with a URL input field and submit button.
+- `app/pages/catalog/create.vue` includes a "From URL" tab with a URL input field and submit button (the tab exists in the scaffold).
 - On submission, calls `POST /api/cards/from-url`.
-- Displays a loading state during ingestion (fetching + AI cataloging can take several seconds).
+- Displays a loading state while the page is fetched and the card is created, which can take several seconds. AI processing is not part of this wait. The new card shows its AI statuses and updates as they change.
 - Maps known error codes to user-friendly messages.

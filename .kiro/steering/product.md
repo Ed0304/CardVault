@@ -38,6 +38,7 @@ Every knowledge card contains three independent information layers:
 | AI catalog | Summary, subjects, keywords, embeddings | AI-generated; user-editable |
 
 AI-generated information must never silently overwrite original content or personal notes.
+AI-generated results must also never overwrite a user's edits to AI metadata.
 
 ## Product Principles
 
@@ -61,6 +62,8 @@ Included:
 - AI semantic search.
 - Related card discovery.
 - Responsive web interface.
+
+Implementation status note: AI-generated summaries, subjects, keywords, embeddings, AI semantic search and related-card discovery remain in MVP scope. The intended runtime AI provider is Meta Model API; nothing is implemented yet, and the embedding source for semantic search is unresolved. Non-AI features, including keyword search over source content, are not blocked. AI image generation is an optional capability associated with cards. It is not part of the MVP scope above, does not replace the core catalog, and needs a separate product decision. Video generation is out of scope.
 
 Explicitly excluded from MVP:
 - Collaboration and sharing.

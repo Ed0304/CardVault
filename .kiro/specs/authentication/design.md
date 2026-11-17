@@ -1,117 +1,162 @@
 # Authentication — Design
 
-## Architecture
+How to read this document:
+- **Confirmed architecture**: decisions that are settled.
+- **Current implementation**: what the source code does today (verified by reading source and tests).
+- **Known discrepancies and outstanding work**: where the implementation does not meet the requirements.
+
+## Confirmed architecture
+
+- PostgreSQL is accessed through the existing `pg` connection pool with parameterized SQL. No ORM.
+- The existing `users` table and its UUID identifiers are preserved. No new user fields are introduced.
+- Authentication is a JWT stored in an HttpOnly cookie (`cv_token`), `SameSite=Lax`.
+- Passwords are hashed with Argon2id.
+- Logout is stateless for the MVP: it clears the cookie. There is no server-side revocation or denylist and no
+  refresh token. A JWT copied before logout stays valid until it expires (maximum remaining lifetime 15 minutes).
+  This is an accepted MVP limitation.
+- Registration must not reveal whether an email is already registered (REQ-AUTH-001). See discrepancy D1.
+
+## Current implementation
+
+### Architecture
 
 ```
 Nuxt Frontend
-    │  Cookie (HttpOnly, Secure, SameSite=Strict)
+    │  HttpOnly cookie `cv_token` (JWT) — SameSite=Lax, Secure in production
     ▼
-Express Backend
+Express Backend (src/app.ts, mounted at /api/auth)
     ├── POST /api/auth/register
     ├── POST /api/auth/login
     ├── POST /api/auth/logout
     └── GET  /api/auth/me
-    │
+    │  parameterized SQL via the pg Pool (src/lib/db.ts)
     ▼
-PostgreSQL (users table via Prisma)
+PostgreSQL (users table)
 ```
 
-## Database Schema
+### Database
 
-```prisma
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  displayName  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+The `users` table already exists and is defined in `backend/expressjs/migrations/001_create_users.sql`.
+This feature does not recreate or alter it.
 
-  cards        KnowledgeCard[]
-  collections  Collection[]
-  tags         Tag[]
-}
-```
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID | Primary key, default `gen_random_uuid()` |
+| username | VARCHAR(100) | Required |
+| email | VARCHAR(255) | Required, unique (`users_email_key`), `CHECK (email = lower(email))` |
+| password_hash | TEXT | Required, Argon2id hash |
+| created_at | TIMESTAMPTZ | Required, default `now()` |
 
-## Session Strategy
+There is no `display_name` or `updated_at` column. The API returns camelCase (`createdAt`).
+Source: the migration file. The live database was not inspected.
 
-- Use `express-session` with a PostgreSQL session store (e.g., `connect-pg-simple`).
-- Session ID stored in a signed, HttpOnly cookie.
-- `req.session.userId` is set on login and cleared on logout.
-- The `authenticate` middleware reads `req.session.userId` — rejects if absent or invalid.
+### Token strategy
 
-## Password Hashing
+- JWT signed with HS256 (`jsonwebtoken`) using `JWT_SECRET` (min 32 characters).
+- Payload: standard claims only: `sub` (user UUID), `iss` (`JWT_ISSUER`, default `cardvault-api`),
+  `aud` (`JWT_AUDIENCE`, default `cardvault-web`), `iat`, `exp`. Lifetime 15 minutes.
+- Cookie `cv_token`: `httpOnly: true`, `sameSite: 'lax'`, `path: '/'`, `maxAge` 15 minutes,
+  `secure: true` when `NODE_ENV=production`.
+- Verification (`src/lib/jwt.ts`) restricts algorithms to HS256 and checks issuer, audience, expiry,
+  and that `sub` is a UUID.
+- `authenticate` uses the `Authorization: Bearer` header if present, otherwise the cookie. It sets
+  `req.user = { id }` and does not query the database. Any failure returns a generic 401.
+- `GET /me` loads the user from the database and returns 401 if the account no longer exists.
+- Logout clears the cookie (matching attributes). The endpoint does not require authentication.
 
-- Use `bcrypt` with a cost factor of 12.
-- Hash on registration; compare on login using `bcrypt.compare`.
+### Password hashing
 
-## API Endpoints
+- Argon2id via `argon2`: memoryCost 19456 KiB, timeCost 2, parallelism 1 (`src/lib/password.ts`).
+- Login verifies with `argon2.verify`. For unknown emails it verifies against a dummy hash so timing is similar.
+- Registration hashes the password before the insert.
 
-### POST /api/auth/register
-Request:
-```json
-{ "email": "user@example.com", "password": "secret123", "displayName": "Alice" }
-```
-Response (201):
-```json
-{ "data": { "id": "...", "email": "user@example.com", "displayName": "Alice" }, "error": null, "message": "Account created" }
-```
+### API endpoints
 
-### POST /api/auth/login
-Request:
-```json
-{ "email": "user@example.com", "password": "secret123" }
-```
-Response (200):
-```json
-{ "data": { "id": "...", "email": "user@example.com", "displayName": "Alice" }, "error": null, "message": "Logged in" }
-```
+All responses use `{ data, error, message }`. Register and login also send `Set-Cookie: cv_token=...`.
+The token is not in the response body.
 
-### POST /api/auth/logout
-Response (200):
-```json
-{ "data": null, "error": null, "message": "Logged out" }
-```
+#### POST /api/auth/register
+Request: `{ "username": "alice", "email": "user@example.com", "password": "secret123" }`
+Response (201): `{ "data": { "user": { "id": "<uuid>", "username": "alice", "email": "user@example.com", "createdAt": "<ISO>" }, "expiresIn": 900 }, "error": null, "message": "Registration successful" }`
 
-### GET /api/auth/me
-Response (200):
-```json
-{ "data": { "id": "...", "email": "user@example.com", "displayName": "Alice", "createdAt": "..." }, "error": null, "message": "OK" }
-```
+#### POST /api/auth/login
+Request: `{ "email": "user@example.com", "password": "secret123" }`
+Response (200): same shape as register, message "Login successful".
 
-## Zod Validation Schemas
+#### POST /api/auth/logout
+Response (200): `{ "data": null, "error": null, "message": "Logged out" }`
 
-```typescript
-// src/schemas/auth.ts
-export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  displayName: z.string().min(1).max(100).optional(),
-})
+#### GET /api/auth/me
+Response (200): `{ "data": { "user": { ...same user fields } }, "error": null, "message": "Success" }`
 
-export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-})
-```
+#### Error responses (current behaviour)
+| Status | error.code | When |
+|---|---|---|
+| 400 | VALIDATION_ERROR | Zod failure; `details: [{ field, message }]` |
+| 400 | INVALID_JSON | Malformed JSON body |
+| 401 | INVALID_CREDENTIALS | Wrong email or password (same message for both) |
+| 401 | UNAUTHORIZED | Missing, expired or invalid token |
+| 409 | EMAIL_ALREADY_REGISTERED | Duplicate email on register. **Discrepancy D1: violates REQ-AUTH-001.** |
+| 413 | PAYLOAD_TOO_LARGE | Body over 10 KB |
+| 500 | INTERNAL_ERROR | Unexpected error; no internals exposed |
 
-## Nuxt Auth Middleware
+### Zod validation (`src/schemas/auth.schemas.ts`)
 
-```typescript
-// app/middleware/auth.ts
-export default defineNuxtRouteMiddleware(() => {
-  const { user } = useAuth()
-  if (!user.value) {
-    return navigateTo('/auth/login')
-  }
-})
-```
+- register: `username` trimmed, 3–100, `/^[A-Za-z0-9_.-]+$/`; `email` trimmed, lowercased, valid, max 255;
+  `password` 8–128 characters.
+- login: `email` (same normalization); `password` 1–128 characters.
 
-The `useAuth` composable calls `GET /api/auth/me` on app load and caches the result. A null response means unauthenticated.
+### Frontend
 
-## Security Notes
+- `app/plugins/auth.ts` restores the user on first load via `useAuth().fetchUser()` (`GET /api/auth/me`).
+- `app/services/api.ts` sends `credentials: 'include'` and forwards the incoming cookie during SSR.
+- Pages: `app/pages/login.vue` and `app/pages/register.vue`.
+- The register page displays the server's error message, so it currently shows the duplicate-email message.
 
-- Generic error messages on login failure — never "email not found" vs "wrong password".
-- Session cookie attributes: `httpOnly: true`, `secure: true` (production), `sameSite: 'strict'`.
-- Passwords never logged or included in API responses.
-- `userId` for all data operations comes from `req.session.userId`, not from request body.
+## Known discrepancies and outstanding work
+
+### D1. Duplicate-email registration reveals that the email exists (not satisfied; fix not yet implemented)
+
+- Requirement: REQ-AUTH-001 (unchanged).
+- Current: a unique-violation on `email` becomes `409 EMAIL_ALREADY_REGISTERED`.
+- Impact: lets anyone test whether an email has an account (account enumeration).
+- Constraints any fix must meet:
+  - The response for an already-registered email must not be distinguishable from a normal registration outcome
+    by status, body or headers.
+  - The caller must never be authenticated as the existing account (no cookie issued for it).
+  - The unique-violation race (two simultaneous registrations) must be handled the same way.
+  - Hashing before the lookup/insert (already the case) should be kept so timing stays similar.
+- Open design tension: REQ-AUTH-001 also says a successful registration logs the user in immediately. A duplicate
+  cannot be logged in, so the two outcomes differ by the presence of the cookie. Resolving this needs a
+  decision (see tasks: TASK-AUTH-022). The approach is not decided.
+- Work: TASK-AUTH-022 (backend), TASK-AUTH-023 (tests), TASK-AUTH-024 (frontend).
+
+### D2. Stateless logout (accepted MVP limitation, not a defect)
+
+- Logout clears the cookie only. A copied token works until expiry (max 15 minutes), including through the
+  `Authorization: Bearer` header.
+- Revocation/denylist and refresh tokens are out of scope for the MVP.
+
+### D3. `Authorization: Bearer` is accepted in addition to the cookie
+
+- Current behaviour, used by API clients and tests. It is not part of the confirmed cookie architecture.
+  Whether to keep it is an open decision.
+
+### D4. `authenticate` does not check that the user still exists
+
+- Only `GET /me` queries the database. For other protected routes a token for a deleted account stays valid until
+  it expires. Account deletion is out of scope for the MVP.
+
+### D5. Frontend route guard and login redirect are not implemented
+
+- `app/middleware/auth.ts` does not exist (REQ-AUTH-007). Login always navigates to `/catalog` instead of the
+  originally requested page.
+
+## Security notes
+
+- Generic login failure message; the same 401 for wrong email and wrong password.
+- Passwords and tokens are never logged or returned in response bodies.
+- `userId` always comes from the verified token subject, never from request input.
+- No rate limiting, CSRF token beyond `SameSite=Lax`, or refresh tokens exist.
+- Deployment-dependent settings that cannot be verified from source (real `JWT_SECRET` strength, `NODE_ENV` in
+  production, database TLS, live schema) are not asserted here.
