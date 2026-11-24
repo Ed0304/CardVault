@@ -6,8 +6,12 @@ export default defineNuxtConfig({
   // Global design tokens and base styles
   css: ['~/assets/css/main.css'],
 
-  // Express API base URL. Override with NUXT_PUBLIC_API_BASE.
+  // Express API base URL used by the browser and SSR. Override with NUXT_PUBLIC_API_BASE.
+  // Set it to `/api` to route calls through this app's own /api proxy (see server/api/[...path].ts).
   runtimeConfig: {
+    // Server-only: where the /api proxy forwards to. Override with NUXT_API_PROXY_TARGET,
+    // for example http://backend.railway.internal:8080. Empty means localhost:5000 in dev only.
+    apiProxyTarget: '',
     public: {
       apiBase: 'http://localhost:5000/api',
     },

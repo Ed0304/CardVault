@@ -64,7 +64,7 @@ backend/expressjs/
 │   │   ├── authService.ts
 │   │   ├── userService.ts         # SQL for the users table
 │   │   └── (planned) cardService.ts, collectionService.ts, tagService.ts, aiService.ts, urlIngestionService.ts, searchService.ts
-│   │       (aiService.ts calls FastAPI only, never the AI provider; searchService.ts runs pgvector queries via the pg pool)
+│   │       (aiService.ts calls FastAPI only, never the AI provider; searchService.ts runs keyword search in the MVP and pgvector queries in the future milestone, via the pg pool)
 │   ├── schemas/
 │   │   ├── auth.schemas.ts        # Zod request schemas
 │   │   └── (planned) cards.schemas.ts, collections.schemas.ts, tags.schemas.ts, search.schemas.ts
@@ -92,21 +92,21 @@ backend/expressjs/
 
 ## FastAPI Backend — `backend/fastapi/` (planned; intended provider: Meta Model API)
 
-Currently only an empty `app.py` exists. The layout below is the planned structure. Provider-specific code stays in `services/` and `core/config.py`. Optional image operations (Muse Image) are not designed yet and have no router or model here. FastAPI contains no similarity search and no database access; vector similarity is Express + PostgreSQL.
+Currently only an empty `app.py` exists. The layout below is the planned structure. The MVP needs only catalog generation and health (`routers/catalog.py`, `routers/health.py`, `services/llm.py`). The embedding files belong to the future Semantic Retrieval milestone. Provider-specific code stays in `services/` and `core/config.py`. Optional image operations (Muse Image) are not designed yet and have no router or model here. FastAPI contains no similarity search and no database access; vector similarity is Express + PostgreSQL.
 
 ```
 backend/fastapi/
 ├── app.py                         # FastAPI entry — creates app, includes routers
 ├── routers/
 │   ├── catalog.py                 # POST /catalog — summarize, subjects, keywords
-│   ├── embeddings.py              # POST /embeddings — generate vector embedding
+│   ├── embeddings.py              # POST /embeddings — generate vector embedding (future Semantic Retrieval milestone)
 │   └── health.py                  # GET /health
 ├── models/
 │   ├── catalog.py                 # Pydantic models for catalog requests/responses
-│   └── embeddings.py              # Pydantic models for embedding requests/responses
+│   └── embeddings.py              # Pydantic models for embedding requests/responses (future milestone)
 ├── services/
 │   ├── llm.py                     # LLM provider client (configurable)
-│   └── embedder.py                # Embedding provider client (configurable)
+│   └── embedder.py                # Embedding generation, local inference preferred (future milestone; not selected)
 ├── core/
 │   └── config.py                  # Settings loaded from environment variables
 └── requirements.txt               # Python dependencies (to be created)

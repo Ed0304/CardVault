@@ -6,10 +6,9 @@ Raw PostgreSQL, applied by `npm run migrate` from SQL files in `backend/expressj
 Every file must be idempotent because all files run on every migrate. The existing `users` table
 (`001_create_users.sql`, UUID primary key) is referenced and never altered.
 
-```sql
--- 002_enable_pgvector.sql
-CREATE EXTENSION IF NOT EXISTS vector;
+The MVP schema needs neither the pgvector extension nor an embedding column. Those belong to the future Semantic Retrieval milestone (see "Future milestone schema" below).
 
+```sql
 -- 003_create_catalog_tables.sql
 CREATE TABLE IF NOT EXISTS collections (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,10 +40,11 @@ CREATE TABLE IF NOT EXISTS knowledge_cards (
     ai_summary    TEXT,
     ai_subjects   TEXT[] NOT NULL DEFAULT '{}',
     ai_keywords   TEXT[] NOT NULL DEFAULT '{}',
-    -- The embedding column is intentionally omitted here. Its dimension is an open decision (D-6).
-    -- It is added by a later migration (TASK-CAT-024).
+    -- The embedding column is intentionally omitted: it belongs to the future Semantic Retrieval
+    -- milestone (TASK-CAT-024), and its dimension is an open decision (D-6).
     -- Two independent AI processing statuses (proposed, pending decision D-8). No default:
-    -- the service sets the initial value explicitly (D-9).
+    -- the service sets the initial value explicitly (D-9). In the MVP the embedding status is
+    -- always NOT_AVAILABLE (not implemented), which is not a processing failure.
     ai_catalog_status   TEXT NOT NULL
                         CHECK (ai_catalog_status IN ('PENDING', 'COMPLETE', 'FAILED', 'NOT_AVAILABLE')),
     ai_embedding_status TEXT NOT NULL
@@ -71,14 +71,28 @@ Notes:
 - Ownership of `collection_id` and tag assignments is verified in the service (`user_id` match), not by a composite foreign key.
 - JSON responses keep the camelCase field names below (`sourceTitle`, `aiSummary`, ...). Services map from snake_case columns.
 - `ai_catalog_status` tracks summary, subjects and keywords. `ai_embedding_status` tracks the embedding. They are independent. User edits change neither.
-- Proposed invariant: `ai_embedding_status = 'COMPLETE'` if and only if an embedding is stored.
-- The extension migration needs pgvector installed on the server (unverified).
+- Proposed invariant (future milestone): `ai_embedding_status = 'COMPLETE'` if and only if an embedding is stored.
+
+### Future milestone schema (Semantic Retrieval; not an MVP prerequisite)
+
+```sql
+-- 002_enable_pgvector.sql  (TASK-CAT-001)
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 004_add_embedding_column.sql  (TASK-CAT-024)
+ALTER TABLE knowledge_cards ADD COLUMN IF NOT EXISTS embedding vector(<N>);
+```
+
+- `<N>` is the embedding dimension, an open decision (D-6) that depends on the embedding provider (D-12, deferred).
+- The extension migration needs pgvector installed on the server (unverified). Migration numbers are provisional; all migration files re-run in filename order and are idempotent, so adding a file numbered `002` later is harmless.
+- The future vector index is described in the semantic-search design.
+- The MVP `/api/cards?q=` filter and `GET /api/search` keyword search work without these migrations.
 
 ## API Endpoints
 
 | Method | Path | Description |
 |---|---|---|
-| GET | /api/cards | Paginated card list (filter: collectionId, tagId, q) |
+| GET | /api/cards | Paginated card list (filter: collectionId, tagId, q). Whether the `q` keyword filter or `GET /api/search` is the MVP keyword search is open (D-14) |
 | POST | /api/cards | Create card from text |
 | GET | /api/cards/:id | Full card detail |
 | PATCH | /api/cards/:id/notes | Update personal notes |
@@ -151,7 +165,7 @@ Notes:
 ## Service Layer
 
 `cardService.ts` responsibilities:
-- `createCard(userId, input)` — insert the card with its initial AI statuses (`NOT_AVAILABLE` while no runtime AI integration is available; `PENDING` once AI is enabled; mechanism D-9). When AI is enabled, start the independent AI operations via `aiService` (blocked, TASK-AI-015).
+- `createCard(userId, input)` — insert the card with its initial AI statuses and return without waiting for any AI work. The catalog status is `PENDING` when catalog generation is enabled and `NOT_AVAILABLE` when it is not implemented or not enabled (mechanism D-9). The embedding status is `NOT_AVAILABLE` throughout the MVP. When catalog generation is enabled, start it via `aiService` after the insert (TASK-AI-015). Embedding generation is future-milestone work.
 - `getCards(userId, filters, pagination)` — scoped list query.
 - `getCard(userId, cardId)` — scoped detail query; throw 404 if not found or wrong user.
 - `updateNotes(userId, cardId, notes)` — scoped update of `notes` field only.

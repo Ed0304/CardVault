@@ -2,23 +2,25 @@
 
 ## Database
 
-- [ ] **TASK-CAT-001** Create `backend/expressjs/migrations/002_enable_pgvector.sql` — `CREATE EXTENSION IF NOT EXISTS vector;`. Requires pgvector to be installed on the PostgreSQL server (unverified). Unused until an embedding column exists (TASK-CAT-024).
-- [ ] **[needs D-8]** **TASK-CAT-002** Create `backend/expressjs/migrations/003_create_catalog_tables.sql` — `collections`, `tags`, `knowledge_cards` (with `ai_catalog_status` and `ai_embedding_status`, and without the `embedding` column, which is deferred), `card_tags`, and indexes, as in `design.md`. Idempotent; do not alter `users`.
-- [ ] **TASK-CAT-003** Run `npm run migrate` and verify the tables exist (e.g. `\d knowledge_cards` in psql). Run it twice to confirm idempotence.
+> **MVP vs future:** every task below is MVP unless tagged `[FUTURE]`. No MVP task depends on a `[FUTURE]` task. The MVP database work is TASK-CAT-002 and TASK-CAT-003, and it needs neither pgvector nor an embedding column.
+
+- [ ] **[FUTURE: Semantic Retrieval milestone]** **TASK-CAT-001** Create `backend/expressjs/migrations/002_enable_pgvector.sql` — `CREATE EXTENSION IF NOT EXISTS vector;`. Requires pgvector to be installed on the PostgreSQL server (unverified). Not an MVP prerequisite; unused until an embedding column exists (TASK-CAT-024).
+- [ ] **[needs D-8]** **TASK-CAT-002** Create `backend/expressjs/migrations/003_create_catalog_tables.sql` — `collections`, `tags`, `knowledge_cards` (with `ai_catalog_status` and `ai_embedding_status`, and without the `embedding` column, which is future-milestone work), `card_tags`, and indexes, as in `design.md`. Idempotent; do not alter `users`. Does not depend on TASK-CAT-001.
+- [ ] **TASK-CAT-003** Run `npm run migrate` and verify the tables exist (e.g. `\d knowledge_cards` in psql). Run it twice to confirm idempotence. Completion criterion: the catalog tables exist and the second run changes nothing, with no pgvector installed.
 
 ## Express Backend
 
 - [ ] **TASK-CAT-004** Create `src/schemas/cards.schemas.ts` — Zod schemas for `createCardSchema`, `updateNotesSchema`, `updateAiMetadataSchema`.
 - [ ] **TASK-CAT-005** Create `src/schemas/collections.schemas.ts` — Zod schemas for `createCollectionSchema`, `renameCollectionSchema`.
 - [ ] **TASK-CAT-006** Create `src/schemas/tags.schemas.ts` — Zod schema for `createTagSchema`.
-- [ ] **TASK-CAT-007** Create `src/services/cardService.ts` — implement `createCard`, `getCards`, `getCard`, `updateNotes`, `updateAiMetadata`, `deleteCard`. Use the `pg` pool (`src/lib/db.ts`) with parameterized SQL; every query includes `user_id = $n`. Sets the initial AI statuses on insert (D-9); the AI calls themselves are TASK-AI-015 [BLOCKED].
+- [ ] **TASK-CAT-007** Create `src/services/cardService.ts` — implement `createCard`, `getCards`, `getCard`, `updateNotes`, `updateAiMetadata`, `deleteCard`. Use the `pg` pool (`src/lib/db.ts`) with parameterized SQL; every query includes `user_id = $n`. Sets the initial AI statuses on insert (D-9) and returns without waiting for any AI work; the catalog-generation call itself is TASK-AI-015. Does not depend on embeddings or any future task.
 - [ ] **TASK-CAT-008** Create `src/services/collectionService.ts` — implement `getCollections`, `createCollection`, `renameCollection`, `deleteCollection`. Use the `pg` pool (`src/lib/db.ts`) with parameterized SQL; every query includes `user_id = $n`.
 - [ ] **TASK-CAT-009** Create `src/services/tagService.ts` — implement `getTags`, `createTag`, `deleteTag`, `applyTagToCard`, `removeTagFromCard`. Use the `pg` pool (`src/lib/db.ts`) with parameterized SQL; every query includes `user_id = $n`.
 - [ ] **TASK-CAT-010** Create `src/routes/cards.routes.ts` and `src/controllers/cardController.ts` — mount all card endpoints; protect with `authenticate`.
 - [ ] **TASK-CAT-011** Create `src/routes/collections.routes.ts` and `src/controllers/collectionController.ts` — mount all collection endpoints; protect with `authenticate`.
 - [ ] **TASK-CAT-012** Create `src/routes/tags.routes.ts` and `src/controllers/tagController.ts` — mount all tag endpoints; protect with `authenticate`.
 - [ ] **TASK-CAT-013** Mount cards, collections, and tags routers in `src/app.ts` under `/api`.
-- [ ] **[BLOCKED: D-12, D-6]** **TASK-CAT-024** Create `backend/expressjs/migrations/004_add_embedding_column.sql` — `ALTER TABLE knowledge_cards ADD COLUMN IF NOT EXISTS embedding vector(<N>);` with N set by decision D-6. Idempotent.
+- [ ] **[FUTURE: Semantic Retrieval milestone; needs D-6, D-12]** **TASK-CAT-024** Create `backend/expressjs/migrations/004_add_embedding_column.sql` — `ALTER TABLE knowledge_cards ADD COLUMN IF NOT EXISTS embedding vector(<N>);` with N set by decision D-6. Idempotent.
 
 ## Frontend
 

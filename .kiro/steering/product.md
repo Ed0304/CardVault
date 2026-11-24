@@ -24,8 +24,8 @@ Information saved online is quickly lost, forgotten, or buried. Existing tools e
 2. **Save from URL** — Provide a public URL, CardVault extracts the content, preserves it, and AI-catalogs it.
 3. **Review and annotate** — Open a card, read the original content, review AI metadata, add personal notes.
 4. **Organize** — Add cards to collections and apply tags.
-5. **Rediscover** — Use keyword search or AI semantic search to find relevant past knowledge.
-6. **Discover related** — From any card, surface semantically similar cards from the personal vault.
+5. **Rediscover** — Use keyword search to find relevant past knowledge. AI semantic search is planned for the future Semantic Retrieval milestone (see MVP Scope).
+6. **Discover related** — From any card, surface semantically similar cards from the personal vault. Planned for the future Semantic Retrieval milestone.
 
 ## Three-Layer Card Model
 
@@ -35,7 +35,7 @@ Every knowledge card contains three independent information layers:
 |---|---|---|
 | Original source | Extracted text, source URL, source metadata | Immutable after creation |
 | Personal notes | User-authored observations and annotations | User only |
-| AI catalog | Summary, subjects, keywords, embeddings | AI-generated; user-editable |
+| AI catalog | Summary, subjects, keywords (MVP); embeddings (future Semantic Retrieval milestone) | AI-generated; user-editable |
 
 AI-generated information must never silently overwrite original content or personal notes.
 AI-generated results must also never overwrite a user's edits to AI metadata.
@@ -58,12 +58,19 @@ Included:
 - AI-generated summary, subjects, and keywords.
 - User-editable AI metadata.
 - Collections and tags.
-- Keyword-based search.
-- AI semantic search.
-- Related card discovery.
+- PostgreSQL keyword search. It works without embeddings, pgvector or any AI service.
 - Responsive web interface.
 
-Implementation status note: AI-generated summaries, subjects, keywords, embeddings, AI semantic search and related-card discovery remain in MVP scope. The intended runtime AI provider is Meta Model API; nothing is implemented yet, and the embedding source for semantic search is unresolved. Non-AI features, including keyword search over source content, are not blocked. AI image generation is an optional capability associated with cards. It is not part of the MVP scope above, does not replace the core catalog, and needs a separate product decision. Video generation is out of scope.
+The MVP is functional with keyword search alone. AI cataloging (summary, subjects, keywords) uses Meta Model API (Muse Spark) and is independent of search: card creation never waits for it, and keyword search does not need its results.
+
+Planned future milestone: Semantic Retrieval (not part of the MVP; the requirements are preserved):
+- Embedding generation. FastAPI generates embeddings, with local inference as the preferred direction. No embedding model or runtime is selected, and no second hosted AI provider is introduced.
+- Vector storage with pgvector in PostgreSQL.
+- AI semantic search, with `auto` (semantic with keyword fallback) as the intended default mode.
+- Related card discovery.
+- Express owns the database operations and the PostgreSQL similarity queries.
+
+Implementation status note: nothing in the AI work is implemented yet. The intended hosted AI provider is Meta Model API. AI image generation is an optional capability associated with cards. It is not part of the MVP scope above, does not replace the core catalog, and needs a separate product decision. Video generation is out of scope.
 
 Explicitly excluded from MVP:
 - Collaboration and sharing.
