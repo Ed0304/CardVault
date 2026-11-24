@@ -12,7 +12,7 @@ inclusion: always
 | Main Backend | Node.js, Express.js v5, TypeScript, Zod, `pg` (node-postgres) with parameterized SQL |
 | Authentication | JWT (HS256, `jsonwebtoken`) in an HttpOnly cookie; Argon2id password hashing (`argon2`) |
 | AI Backend | Python, FastAPI (planned) calling Meta Model API (intended provider; see Architecture Decision 10) |
-| Database | PostgreSQL with pgvector extension |
+| Database | PostgreSQL (the pgvector extension is added in the future Semantic Retrieval milestone, not the MVP) |
 
 ## Service Responsibilities
 
@@ -30,14 +30,15 @@ inclusion: always
 - Owns all database interactions through the shared `pg` connection pool (`src/lib/db.ts`) using parameterized SQL. No ORM.
 - Validates all inbound requests with Zod schemas.
 - Calls FastAPI internally for AI processing. It never calls the AI provider directly and holds no provider credentials.
-- Owns the semantic-search endpoints: validates queries, enforces user ownership, and runs pgvector similarity queries against PostgreSQL through the `pg` pool.
+- Owns the search endpoints: validates queries, enforces user ownership, and runs the search queries against PostgreSQL through the `pg` pool. In the MVP this is PostgreSQL keyword search. In the future Semantic Retrieval milestone it also runs pgvector similarity queries.
 - Applies user-level data isolation on every query.
 - The only service that exposes a public API.
 
 ### AI Backend — `backend/fastapi/`
 - FastAPI with Python.
 - Internal service only — not exposed to the public internet.
-- Planned responsibilities: catalog generation (summary, subjects, keywords) with Muse Spark, embedding generation (source unresolved), optional image generation and editing with Muse Image, and AI health checks.
+- MVP responsibilities: catalog generation (summary, subjects, keywords) with Muse Spark, and AI health checks. Optional image generation and editing with Muse Image is outside the MVP.
+- Future Semantic Retrieval milestone: embedding generation. Local inference in FastAPI is the preferred direction; no embedding model or runtime is selected, and no second hosted AI provider is introduced.
 - Is the only service that calls Meta Model API and the only one that holds its credentials. Credentials are server-side environment variables and are never exposed to Nuxt.
 - Does not implement or expose similarity search. Vector similarity is performed by PostgreSQL (pgvector) and orchestrated by Express.
 - Does not read or write the main application database directly.
@@ -51,15 +52,15 @@ inclusion: always
 2. Express → FastAPI is an internal HTTP call, not a public API.
 3. FastAPI must not independently modify user or card records.
 4. PostgreSQL is the single primary datastore.
-5. pgvector stores and queries card embeddings within PostgreSQL — no separate vector database.
+5. Future Semantic Retrieval milestone: pgvector stores and queries card embeddings within PostgreSQL — no separate vector database. pgvector is not an MVP prerequisite.
 6. No Redis, message brokers, Kubernetes, or additional databases without a documented requirement.
 7. Express accesses PostgreSQL with raw SQL through the `pg` pool. Prisma is not used.
 8. Authentication is stateless: a JWT in an HttpOnly cookie. There is no server-side session store.
    Logout clears the cookie only. Token revocation/denylists and refresh tokens are out of scope for the MVP;
    a previously copied token stays valid until it expires (access tokens last 15 minutes).
-9. Semantic search is owned by Express and PostgreSQL. Express exposes the endpoints, validates queries, enforces user ownership and runs similarity queries. PostgreSQL (pgvector) stores vectors and computes and ranks similarity. FastAPI has no database access, no similarity-search implementation and no similarity endpoint.
-10. The intended runtime AI provider is Meta Model API (Muse family), chosen by the project owner. Muse Spark (`muse-spark-1.3`, Standard mode) handles cataloging, summaries, keyword extraction, reasoning and image understanding. Muse Image (`muse-image-1.0`) handles optional image generation and editing. Video generation is out of scope. FastAPI calls the provider; Express never does. The embedding source is unresolved: Meta's published model catalog lists no embedding model, so semantic search remains blocked on it. Provider facts are documented but unverified for this project; see the ai-cataloging design. Kiro's development-time AI is not a runtime dependency.
-11. AI processing has two independent statuses per card: catalog generation (summary, subjects, keywords) and embedding generation. Each can be `PENDING`, `COMPLETE`, `FAILED` or `NOT_AVAILABLE`. (The state set is proposed; see the ai-cataloging design.)
+9. Search is owned by Express and PostgreSQL. The MVP search is PostgreSQL keyword search and needs no embeddings, pgvector or AI service. In the future Semantic Retrieval milestone, Express runs the similarity queries and PostgreSQL (pgvector) stores vectors and computes and ranks similarity. FastAPI has no database access, no similarity-search implementation and no similarity endpoint. FastAPI may only generate embeddings (future). The intended default search mode for the future milestone is `auto` (semantic search with keyword fallback); decision D-11 is resolved in that direction.
+10. The intended runtime AI provider is Meta Model API (Muse family), chosen by the project owner. Muse Spark (`muse-spark-1.3`, Standard mode) handles cataloging, summaries, keyword extraction, reasoning and image understanding. Muse Image (`muse-image-1.0`) handles optional image generation and editing. Video generation is out of scope. FastAPI calls the provider; Express never does. No second hosted AI provider is introduced. The embedding provider is deferred to the future Semantic Retrieval milestone, with local inference in FastAPI as the preferred direction (Meta's published model catalog lists no embedding model). Embedding model and runtime selection are not MVP prerequisites. Provider facts are documented but unverified for this project; see the ai-cataloging design. Kiro's development-time AI is not a runtime dependency.
+11. AI processing has two independent statuses per card: catalog generation (summary, subjects, keywords) and embedding generation. Each can be `PENDING`, `COMPLETE`, `FAILED` or `NOT_AVAILABLE` (not implemented or not enabled). In the MVP the embedding status is `NOT_AVAILABLE`, which is not a processing failure. (The state set is proposed; see the ai-cataloging design.)
 
 ## API Communication
 
@@ -81,19 +82,21 @@ inclusion: always
 - Schema changes are plain SQL files in `backend/expressjs/migrations/`, applied in filename order by `npm run migrate` (`scripts/migrate.ts`). There is no migration history table, so every file runs on every invocation and must be idempotent (`IF NOT EXISTS`, etc.).
 - The existing `users` table (`migrations/001_create_users.sql`) is the source of truth for user data. New tables reference `users(id)` (UUID) and must not alter it.
 - SQL table and column names are snake_case. Services map rows to camelCase objects before returning them.
-- pgvector is enabled by a SQL migration (`CREATE EXTENSION IF NOT EXISTS vector;`). Embeddings are `vector` columns on the cards table. `pg` has no native vector type, so vectors are written and read as text (e.g. `$1::vector` with `'[0.1,0.2]'`).
+- Future Semantic Retrieval milestone (not an MVP prerequisite): pgvector is enabled by a SQL migration (`CREATE EXTENSION IF NOT EXISTS vector;`). Embeddings are `vector` columns on the cards table. `pg` has no native vector type, so vectors are written and read as text (e.g. `$1::vector` with `'[0.1,0.2]'`).
+- MVP search is keyword search over the cards table and does not depend on pgvector.
 - All database queries in Express are scoped to `user_id`, taken from the verified JWT (`req.user.id`), never from the request body.
 
 ## AI Integration Strategy
 
-- Express sends card text to FastAPI for catalog generation (`{ summary, subjects, keywords }`) and embedding generation (`{ embedding }`). Whether these are one request or two at the API level is an open decision. Their outcomes are always recorded independently.
-- While the runtime AI integration is not operational, cards are saved with both AI statuses `NOT_AVAILABLE` and no AI call is made.
+- MVP: after a card is saved, Express sends its text to FastAPI for catalog generation (`{ summary, subjects, keywords }`). Card creation never waits for it.
+- Future Semantic Retrieval milestone: Express also asks FastAPI for an embedding (`{ embedding }`). Embedding generation is independent of catalog generation, and card creation never waits for it either. Whether the two are one request or two at the API level is an open decision. Their outcomes are always recorded independently.
+- When catalog generation is not implemented or not enabled, the catalog status is `NOT_AVAILABLE` and no AI call is made. In the MVP the embedding status is always `NOT_AVAILABLE`.
 - AI provider credentials are environment variables in FastAPI only — never in source code, never in `.env.example` with real values, never exposed to Nuxt or in Express responses, never logged.
 - Only Standard-mode (non-training) provider models may process user content. Meta's Contributor-mode variants (documented as permitting training on content) must not be configured.
 - Image generation is optional and independent of the two AI statuses.
 - Express validates the AI response shape before persisting it.
 - If AI processing fails, the card is saved without AI metadata — original content is never lost.
-- Embeddings are generated by Express calling FastAPI after card creation; they are not blocking.
+- Future milestone: embeddings are generated by FastAPI when Express asks after card creation; they are not blocking.
 - Users can edit AI-generated summary, subjects, and keywords; edits do not trigger re-generation.
 - AI-generated results must never overwrite user edits.
 
