@@ -24,7 +24,7 @@ const sourceMetaEntries = computed(() =>
   <section>
     <NuxtLink to="/catalog" class="back-link">
       <CommonAppIcon name="arrow-left" :size="16" />
-      Catalog
+      My Vault
     </NuxtLink>
 
     <CommonLoadingState v-if="isLoading" label="Loading card…" />
@@ -40,6 +40,10 @@ const sourceMetaEntries = computed(() =>
           <CommonAppBadge v-for="tag in card.tags" :key="tag.id" variant="outline">
             {{ tag.name }}
           </CommonAppBadge>
+          <CommonAppBadge :variant="card.visibility === 'PUBLIC' ? 'success' : 'outline'">
+            <CommonAppIcon :name="card.visibility === 'PUBLIC' ? 'globe' : 'lock'" :size="12" />
+            {{ card.visibility === 'PUBLIC' ? 'Public' : 'Private' }}
+          </CommonAppBadge>
           <span class="mono">
             Saved <time :datetime="card.createdAt">{{ formatDate(card.createdAt) }}</time>
           </span>
@@ -51,6 +55,24 @@ const sourceMetaEntries = computed(() =>
           </CommonAppButton>
         </template>
       </CommonPageHeading>
+
+      <!-- Attribution for a copy saved from the Community Catalog (REQ-CAT-014). -->
+      <aside v-if="card.savedFrom" class="attribution" aria-label="Attribution">
+        <CommonAppIcon name="bookmark" :size="18" />
+        <div>
+          <p>
+            Saved from the Community Catalog. Originally cataloged by
+            <strong>{{ card.savedFrom.authorUsername }}</strong>.
+          </p>
+          <p class="attribution__detail">
+            This is your own copy: you can edit it, and changes to the original don't affect it.
+            <NuxtLink v-if="card.savedFrom.originalAvailable" :to="`/community/${card.savedFrom.cardId}`">
+              View the original
+            </NuxtLink>
+            <span v-else>The original is no longer in the Community Catalog.</span>
+          </p>
+        </div>
+      </aside>
 
       <div class="detail__grid">
         <div class="detail__main">
@@ -79,7 +101,14 @@ const sourceMetaEntries = computed(() =>
               </div>
             </dl>
 
-            <p class="detail-original">{{ card.sourceText }}</p>
+            <p v-if="card.sourceText" class="detail-original">{{ card.sourceText }}</p>
+            <p v-else class="text-muted">
+              {{
+                card.savedFrom
+                  ? "The original author didn't share the source text. Follow the source link to read it."
+                  : 'No source text.'
+              }}
+            </p>
           </section>
 
           <!-- Layer 2: personal notes -->
@@ -104,6 +133,7 @@ const sourceMetaEntries = computed(() =>
             :keywords="card.aiKeywords"
             :status="card.aiCatalogStatus"
           />
+          <CatalogCardPublishing :card="card" />
         </aside>
       </div>
     </article>
@@ -124,10 +154,37 @@ const sourceMetaEntries = computed(() =>
   text-decoration: underline;
 }
 
+.attribution {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-sunken);
+  border: var(--border-width) solid var(--border-subtle);
+  border-left: 3px solid var(--color-archive-brown);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+.attribution :deep(.app-icon) {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--color-archive-brown);
+}
+.attribution__detail {
+  color: var(--text-secondary);
+}
+
 .detail__grid {
   display: grid;
   gap: var(--space-5);
   align-items: start;
+}
+.detail__aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 .detail__main {
   display: flex;
@@ -214,6 +271,9 @@ const sourceMetaEntries = computed(() =>
   .detail__aside {
     position: sticky;
     top: calc(var(--header-height) + var(--space-6));
+    /* The aside holds two panels; keep all of it reachable while it sticks. */
+    max-height: calc(100vh - var(--header-height) - var(--space-12));
+    overflow-y: auto;
   }
 }
 </style>

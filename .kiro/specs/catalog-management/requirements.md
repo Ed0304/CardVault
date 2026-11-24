@@ -2,7 +2,7 @@
 
 ## Overview
 
-Catalog management covers creating, reading, updating, and deleting knowledge cards, as well as organizing them into collections and tagging them. This is the core CRUD layer of CardVault.
+Catalog management covers creating, reading, updating, and deleting knowledge cards, organizing them into collections and tagging them, and the Community Catalog: publishing cards, discovering published cards, and saving independent copies (REQ-CAT-011 to REQ-CAT-014). This is the core CRUD layer of CardVault.
 
 ## Knowledge Card Requirements
 
@@ -29,7 +29,8 @@ Catalog management covers creating, reading, updating, and deleting knowledge ca
 ### REQ-CAT-003: View Card List
 - An authenticated user can retrieve a paginated list of their own knowledge cards. The default page size is 20 cards.
 - Each item in the list includes: id, title, summary (if available), subjects, tags, collection, createdAt.
-- Cards from other users are never returned.
+- Each item also includes its visibility and, for saved copies, its provenance (REQ-CAT-013).
+- Cards from other users are never returned, even when they are published. Published cards of other users are reached through the Community Catalog (REQ-CAT-012), and copies saved from it are the saver's own cards.
 - Supports filtering by collection, tag, and a keyword search parameter.
 - Cards are sorted newest first (`createdAt` descending) by default.
 - The response includes the total number of cards matching the applied filters, alongside the current page of results.
@@ -96,9 +97,55 @@ User scoping
 - AI metadata fields are independent of source content and personal notes.
 - All three layers can be null or empty independently without breaking the card record.
 
+## Community Catalog Requirements
+
+CardVault has three connected experiences: **My Vault** (the user's own cards, private by default), the **Community Catalog** (cards their owners published), and **public card detail** (one published card with a Save to My Vault action). The Community Catalog is not a social feed.
+
+### REQ-CAT-011: Publishing and Visibility
+- Every card has a visibility: `PRIVATE` or `PUBLIC`. New cards, and every card that existed before this feature, are `PRIVATE`.
+- Only the owner can publish or unpublish a card. Another user's attempt returns HTTP 404 and changes nothing.
+- Publishing is an explicit action with a confirmation step in the UI that lists what becomes public and what stays private.
+- When publishing, the owner states whether the original source text is included. The API requires this choice (`shareSourceText`); there is no default. The UI leaves it unticked.
+- Unpublishing makes the card private again and clears the source-text choice, so publishing again needs a fresh choice.
+- The owner views and edits their card through the vault endpoints whatever its visibility.
+- Cards saved from the Community Catalog cannot be published (HTTP 409 `SAVED_COPY_NOT_PUBLISHABLE`). This keeps the original author's card as the public one. **[Decision for this milestone; can be revisited.]**
+- Acceptance criteria:
+  - AC-CAT-011-1: A new card has `visibility: PRIVATE`, `publishedAt: null` and `shareSourceText: false`.
+  - AC-CAT-011-2: A publish request without a boolean `shareSourceText` returns 400 and leaves the card private.
+  - AC-CAT-011-3: Changing the source-text choice on a public card keeps its original `publishedAt`.
+  - AC-CAT-011-4: Unpublishing sets `PRIVATE`, `publishedAt: null` and `shareSourceText: false`.
+
+### REQ-CAT-012: Community Catalog Listing and Search
+- Any signed-in user can list published cards, newest published first, paginated like REQ-CAT-003 (default 20, max 50), with the total.
+- An optional keyword `q` (max 500 characters) matches case-insensitively against the title, summary, subjects and keywords, and against the source text only where the owner shared it. LIKE wildcards in `q` match literally.
+- Private cards never appear and are never counted.
+- Requests without a valid session return 401.
+
+### REQ-CAT-013: Save to My Vault (Independent Copy)
+- A signed-in user can save a published card into their vault. This creates a new card owned by the saver. It is never a live reference or shared ownership.
+- The copy takes the title, source URL, source text (only if shared, otherwise empty), summary, subjects and keywords.
+- The copy records provenance: the original card's id and the original author's username at the time of saving.
+- The copy does not take the original's personal notes, collection, tags, owner, source metadata or AI statuses. Its AI statuses are the initial values for a new card (REQ-AI-012), because it was not processed by AI itself.
+- The copy is `PRIVATE`.
+- The card and its provenance are created in one transaction.
+- Saving a private, unpublished, deleted, unknown or malformed card returns 404. Saving your own card returns 409 `CANNOT_SAVE_OWN_CARD`.
+- A user has at most one copy of a given original. A second save, including a simultaneous one, returns 409 `CARD_ALREADY_SAVED`. After deleting their copy, the user can save the card again.
+- Independence:
+  - The saver can edit the copy. The original owner cannot read, edit or delete it.
+  - Edits to the original never change the copy, and edits to the copy never change the original.
+  - Unpublishing or deleting the original never deletes or changes the copy.
+
+### REQ-CAT-014: Public Card Detail, Attribution and Field Privacy
+- Any signed-in user can open a published card. A private or unknown card returns the same 404, so private cards are not revealed. The owner gets that 404 too through the public endpoint.
+- Public responses carry only these fields: id, title, source URL, summary, subjects, keywords, whether source text is shared, the source text when shared, the author's username, the publication time, and (detail only) whether the viewer owns the card or already has a copy.
+- Public responses never carry personal notes, collections, tags, AI processing statuses, source metadata, owner ids or email addresses. Services select an explicit list of public columns; they never serialize a full card row.
+- A saved copy shows its attribution in the vault (original author, and a link to the original while it is still published). The attribution stays meaningful after the original is unpublished or deleted.
+
 ## Out of Scope
 
-- Shared or collaborative cards.
+- Collaborative cards: shared ownership, collaborative editing, or copies that stay linked to the original.
+- Public access without an account. The Community Catalog requires sign-in.
+- Social features: likes, comments, followers, reputation, recommendation feeds.
 - Card versioning or edit history.
 - Bulk import or export.
 - Card templates.

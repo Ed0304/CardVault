@@ -13,7 +13,17 @@ const hiddenSubjectCount = computed(() => Math.max(0, props.card.aiSubjects.leng
 <template>
   <article class="kcard">
     <div class="kcard__strip">
-      <span class="mono kcard__number">No. {{ shortId(card.id) }}</span>
+      <span class="kcard__ident">
+        <span class="mono kcard__number">No. {{ shortId(card.id) }}</span>
+        <CommonAppBadge v-if="card.visibility === 'PUBLIC'" variant="success">
+          <CommonAppIcon name="globe" :size="12" />
+          Public
+        </CommonAppBadge>
+        <CommonAppBadge v-if="card.savedFrom" variant="neutral" :title="`Saved from ${card.savedFrom.authorUsername}`">
+          <CommonAppIcon name="bookmark" :size="12" />
+          Saved
+        </CommonAppBadge>
+      </span>
       <AiProcessingStatus :status="card.aiCatalogStatus" compact />
     </div>
 
@@ -90,6 +100,14 @@ const hiddenSubjectCount = computed(() => Math.max(0, props.card.aiSubjects.leng
   gap: var(--space-3);
   padding: var(--space-2) var(--card-padding);
   border-bottom: var(--border-width) dashed var(--border-default);
+}
+
+.kcard__ident {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .kcard__body {

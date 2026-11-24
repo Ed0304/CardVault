@@ -5,6 +5,7 @@ import {
   listCardsQuerySchema,
   type CreateCardInput,
   type SetCollectionInput,
+  type SetVisibilityInput,
   type UpdateAiMetadataInput,
   type UpdateNotesInput,
 } from "../schemas/cards.schemas.js";
@@ -53,6 +54,11 @@ export async function updateAiMetadata(req: Request, res: Response): Promise<voi
 export async function remove(req: Request, res: Response): Promise<void> {
   await cardService.deleteCard(userIdOf(req), cardIdOf(req));
   res.status(200).json(success(null, "Card deleted"));
+}
+
+export async function setVisibility(req: Request, res: Response): Promise<void> {
+  const card = await cardService.setVisibility(userIdOf(req), cardIdOf(req), req.body as SetVisibilityInput);
+  res.status(200).json(success(card, card.visibility === "PUBLIC" ? "Card published" : "Card unpublished"));
 }
 
 export async function setCollection(req: Request, res: Response): Promise<void> {

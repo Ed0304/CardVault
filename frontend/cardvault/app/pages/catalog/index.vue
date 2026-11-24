@@ -28,8 +28,8 @@ onMounted(fetchCards)
 <template>
   <section>
     <CommonPageHeading
-      title="Catalog"
-      description="Everything you've saved, cataloged and ready to rediscover."
+      title="My Vault"
+      description="Everything you've saved, cataloged and ready to rediscover. Private unless you publish a card."
     >
       <template #actions>
         <CommonAppButton to="/catalog/create">

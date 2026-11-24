@@ -6,6 +6,7 @@ import authRouter from "./routes/auth.routes.js";
 import cardsRouter from "./routes/cards.routes.js";
 import collectionsRouter from "./routes/collections.routes.js";
 import tagsRouter from "./routes/tags.routes.js";
+import communityRouter from "./routes/community.routes.js";
 import { MAX_SOURCE_TEXT_LENGTH } from "./schemas/cards.schemas.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
@@ -35,6 +36,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/cards", cardsRouter);
 app.use("/api/collections", collectionsRouter);
 app.use("/api/tags", tagsRouter);
+app.use("/api/community", communityRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

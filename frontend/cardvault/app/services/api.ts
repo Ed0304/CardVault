@@ -24,6 +24,11 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
   return body?.message ?? fallback
 }
 
+/** The envelope's error code of a failed API call (for example "CARD_ALREADY_SAVED"). */
+export function getApiErrorCode(err: unknown): string | undefined {
+  return (err as { data?: Partial<ApiResponse<null>> } | null)?.data?.error?.code
+}
+
 /** HTTP status of a failed API call, or undefined when the server was not reached at all. */
 export function getApiStatus(err: unknown): number | undefined {
   const e = err as { statusCode?: number; status?: number; response?: { status?: number } } | null

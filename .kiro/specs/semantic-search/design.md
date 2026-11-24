@@ -208,3 +208,5 @@ Deferred to the future milestone. Local inference in FastAPI is the preferred di
 
 ### D-14: Two keyword surfaces (open)
 REQ-CAT-003 and the catalog design give `GET /api/cards` a `q` keyword filter, and this spec defines `GET /api/search`. Which one is the MVP keyword search, and whether both exist, is not decided.
+
+Separate from D-14: the Community Catalog has its own keyword search, `GET /api/community/cards?q=` (catalog-management REQ-CAT-012), implemented in `communityService.ts`. It searches published cards only, matches subjects and keywords case-insensitively, and matches source text only where the author shared it. Neither vault search surface exists yet. When one is built, it can reuse the same escaped `ILIKE` approach, scoped to `user_id`.

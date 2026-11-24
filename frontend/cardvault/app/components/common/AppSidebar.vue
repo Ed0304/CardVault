@@ -24,7 +24,8 @@ const route = useRoute()
 
     <p class="app-sidebar__note">
       <CommonAppIcon name="lock" :size="16" />
-      Private by design. Only you can see your cards.
+      Private by default. Cards stay in your vault unless you publish them, and notes, collections
+      and tags are never shared.
     </p>
   </aside>
 </template>

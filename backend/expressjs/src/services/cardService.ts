@@ -6,11 +6,23 @@ import type {
   CreateCardInput,
   ListCardsQuery,
   SetCollectionInput,
+  SetVisibilityInput,
   UpdateAiMetadataInput,
   UpdateNotesInput,
 } from "../schemas/cards.schemas.js";
 
 export type AiStatus = "PENDING" | "COMPLETE" | "FAILED" | "NOT_AVAILABLE";
+export type Visibility = "PRIVATE" | "PUBLIC";
+
+/** Provenance of a card saved from the Community Catalog (REQ-CAT-013). */
+export interface SavedFrom {
+  /** The original card's id, kept even after the original is deleted. */
+  cardId: string;
+  /** The original author's username when the copy was made. */
+  authorUsername: string;
+  /** Whether the original is still published, so the UI can link to it. */
+  originalAvailable: boolean;
+}
 
 export interface CardSummary {
   id: string;
@@ -22,6 +34,9 @@ export interface CardSummary {
   aiEmbeddingStatus: AiStatus;
   collection: { id: string; name: string } | null;
   tags: { id: string; name: string }[];
+  visibility: Visibility;
+  publishedAt: string | null;
+  savedFrom: SavedFrom | null;
   createdAt: string;
 }
 
@@ -30,6 +45,8 @@ export interface CardDetail extends CardSummary {
   sourceMeta: Record<string, unknown> | null;
   notes: string | null;
   aiKeywords: string[];
+  /** Whether the public card includes the source text (only meaningful while PUBLIC). */
+  shareSourceText: boolean;
   updatedAt: string;
 }
 
@@ -47,7 +64,7 @@ const MAX_DERIVED_TITLE_LENGTH = 200;
  * operations are NOT_AVAILABLE: not attempted, and not a failure. When catalog generation is
  * implemented, the catalog status becomes PENDING while it is enabled.
  */
-function initialAiStatuses(): { catalog: AiStatus; embedding: AiStatus } {
+export function initialAiStatuses(): { catalog: AiStatus; embedding: AiStatus } {
   return { catalog: "NOT_AVAILABLE", embedding: "NOT_AVAILABLE" };
 }
 
@@ -83,6 +100,10 @@ export async function cardBelongsToUser(userId: string, cardId: string): Promise
 const SUMMARY_COLUMNS = `
   c.id, c.source_title, c.source_url, c.ai_summary, c.ai_subjects,
   c.ai_catalog_status, c.ai_embedding_status, c.created_at,
+  c.visibility, c.published_at, c.saved_from_card_id, c.saved_from_author,
+  (c.saved_from_card_id IS NOT NULL AND EXISTS (
+     SELECT 1 FROM knowledge_cards o
+      WHERE o.id = c.saved_from_card_id AND o.visibility = 'PUBLIC')) AS saved_from_available,
   col.id   AS collection_id,
   col.name AS collection_name,
   COALESCE(
@@ -94,7 +115,7 @@ const SUMMARY_COLUMNS = `
   ) AS tags`;
 
 const DETAIL_COLUMNS = `${SUMMARY_COLUMNS},
-  c.source_text, c.source_meta, c.notes, c.ai_keywords, c.updated_at`;
+  c.source_text, c.source_meta, c.notes, c.ai_keywords, c.share_source_text, c.updated_at`;
 
 const FROM_CARDS = `
   FROM knowledge_cards c
@@ -112,10 +133,16 @@ interface CardRow {
   collection_id: string | null;
   collection_name: string | null;
   tags: { id: string; name: string }[];
+  visibility: Visibility;
+  published_at: Date | null;
+  saved_from_card_id: string | null;
+  saved_from_author: string | null;
+  saved_from_available: boolean;
   source_text?: string;
   source_meta?: Record<string, unknown> | null;
   notes?: string | null;
   ai_keywords?: string[];
+  share_source_text?: boolean;
   updated_at?: Date;
 }
 
@@ -133,6 +160,16 @@ function toSummary(row: CardRow): CardSummary {
         ? { id: row.collection_id, name: row.collection_name }
         : null,
     tags: row.tags,
+    visibility: row.visibility,
+    publishedAt: row.published_at ? row.published_at.toISOString() : null,
+    savedFrom:
+      row.saved_from_card_id && row.saved_from_author
+        ? {
+            cardId: row.saved_from_card_id,
+            authorUsername: row.saved_from_author,
+            originalAvailable: row.saved_from_available,
+          }
+        : null,
     createdAt: row.created_at.toISOString(),
   };
 }
@@ -144,6 +181,7 @@ function toDetail(row: CardRow): CardDetail {
     sourceMeta: row.source_meta ?? null,
     notes: row.notes ?? null,
     aiKeywords: row.ai_keywords ?? [],
+    shareSourceText: row.share_source_text ?? false,
     updatedAt: (row.updated_at ?? row.created_at).toISOString(),
   };
 }
@@ -310,6 +348,46 @@ export async function setCollection(
 
 function collectionNotFound(): AppError {
   return new AppError(404, "COLLECTION_NOT_FOUND", "Collection not found");
+}
+
+/**
+ * Publishes or unpublishes one of the user's cards (REQ-CAT-011).
+ *
+ * Publishing records whether the source text is shared and keeps the first publication time if
+ * the card is already public, so changing the text choice does not move it up the community list.
+ * Unpublishing clears both, so publishing again needs a fresh choice. Saved copies cannot be
+ * published (REQ-CAT-013): that would republish another author's card under a new owner.
+ */
+export async function setVisibility(
+  userId: string,
+  cardId: string,
+  input: SetVisibilityInput,
+): Promise<CardDetail> {
+  assertCardId(cardId);
+
+  if (input.visibility === "PRIVATE") {
+    const result = await pool.query(
+      `UPDATE knowledge_cards
+          SET visibility = 'PRIVATE', published_at = NULL, share_source_text = false, updated_at = now()
+        WHERE id = $1 AND user_id = $2`,
+      [cardId, userId],
+    );
+    if (result.rowCount === 0) throw cardNotFound();
+    return getCard(userId, cardId);
+  }
+
+  const result = await pool.query(
+    `UPDATE knowledge_cards
+        SET visibility = 'PUBLIC', published_at = COALESCE(published_at, now()),
+            share_source_text = $1, updated_at = now()
+      WHERE id = $2 AND user_id = $3 AND saved_from_card_id IS NULL`,
+    [input.shareSourceText, cardId, userId],
+  );
+  if (result.rowCount === 0) {
+    if (!(await cardBelongsToUser(userId, cardId))) throw cardNotFound();
+    throw new AppError(409, "SAVED_COPY_NOT_PUBLISHABLE", "Cards saved from the community can't be published");
+  }
+  return getCard(userId, cardId);
 }
 
 /** Permanently deletes a card; its tag links go with it (REQ-CAT-007). */

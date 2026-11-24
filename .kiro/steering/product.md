@@ -6,9 +6,11 @@ inclusion: always
 
 ## Vision
 
-CardVault revives the traditional physical library card catalog through modern web technologies and AI. It is a private, personal knowledge management system — not a bookmarking tool, social network, or public archive.
+CardVault revives the traditional physical library card catalog through modern web technologies and AI. It is a personal knowledge vault extended into a community-powered knowledge catalog: each user's vault is private by default, owners can publish selected cards, and other users can discover published cards and save independent copies into their own vaults. It is not a bookmarking tool or a social network.
 
 **Core philosophy:** Save information once. Let CardVault organize it and help you rediscover it.
+
+**Community principle:** Publish knowledge, preserve attribution, and let every user build their own independent library.
 
 ## Target Users
 
@@ -26,6 +28,19 @@ Information saved online is quickly lost, forgotten, or buried. Existing tools e
 4. **Organize** — Add cards to collections and apply tags.
 5. **Rediscover** — Use keyword search to find relevant past knowledge. AI semantic search is planned for the future Semantic Retrieval milestone (see MVP Scope).
 6. **Discover related** — From any card, surface semantically similar cards from the personal vault. Planned for the future Semantic Retrieval milestone.
+7. **Publish** — From one of their own cards, the owner publishes it to the Community Catalog after a confirmation that lists what becomes public, and chooses explicitly whether the original text is included. They can unpublish at any time.
+8. **Discover in the community** — Browse and keyword-search published cards, open one, and see its author and source.
+9. **Save to My Vault** — Save a published card as an independent, private copy that keeps the original's attribution.
+
+## Three Experiences
+
+| Experience | What it is |
+|---|---|
+| My Vault | The user's own cards. Private by default. Notes, collections and tags are always private. |
+| Community Catalog | Cards their owners published, visible to every signed-in user. Not a feed: no likes, comments, followers, reputation or recommendations. |
+| Public card detail | The approved public fields of one published card, with a **Save to My Vault** action. |
+
+A saved card is an independent copy owned by the saver, never a live reference or shared ownership. Edits, unpublishing or deletion of the original never change or remove the copy.
 
 ## Three-Layer Card Model
 
@@ -42,7 +57,8 @@ AI-generated results must also never overwrite a user's edits to AI metadata.
 
 ## Product Principles
 
-- Privacy first — all data is personal and isolated per user.
+- Privacy first — all data is personal and isolated per user. Nothing becomes public without the owner's explicit, confirmed action, and only approved fields are ever published: never personal notes, collections, tags, or account details beyond the username.
+- Preserve attribution — a saved copy records the original card and author, and keeps that record when the original is gone.
 - Preserve the original — source content is never modified after ingestion.
 - AI assists, user decides — AI metadata is visible, reviewable, and editable.
 - Fail gracefully — AI failures must never result in data loss.
@@ -59,6 +75,7 @@ Included:
 - User-editable AI metadata.
 - Collections and tags.
 - PostgreSQL keyword search. It works without embeddings, pgvector or any AI service.
+- Community Catalog: publishing and unpublishing own cards, browsing and keyword-searching published cards, public card detail, and saving independent copies with attribution.
 - Responsive web interface.
 
 The MVP is functional with keyword search alone. AI cataloging (summary, subjects, keywords) uses Meta Model API (Muse Spark) and is independent of search: card creation never waits for it, and keyword search does not need its results.
@@ -73,9 +90,9 @@ Planned future milestone: Semantic Retrieval (not part of the MVP; the requireme
 Implementation status note: nothing in the AI work is implemented yet. The intended hosted AI provider is Meta Model API. AI image generation is an optional capability associated with cards. It is not part of the MVP scope above, does not replace the core catalog, and needs a separate product decision. Video generation is out of scope.
 
 Explicitly excluded from MVP:
-- Collaboration and sharing.
-- Public libraries.
-- Social features.
+- Collaboration: shared ownership, collaborative editing, live-linked copies.
+- Public access without an account (the Community Catalog requires sign-in).
+- Social features: likes, comments, followers, reputation, recommendation feeds.
 - Browser extensions.
 - Native desktop or mobile applications.
 - Offline-first functionality.

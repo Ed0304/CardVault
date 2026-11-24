@@ -71,7 +71,30 @@ export const setCollectionSchema = z.object({
   collectionId: uuidSchema.nullable(),
 });
 
+/**
+ * Publish or unpublish a card (REQ-CAT-011). Publishing must state whether the original source
+ * text is shared, so the choice is always explicit; there is no default.
+ */
+export const setVisibilitySchema = z.discriminatedUnion("visibility", [
+  z.object({ visibility: z.literal("PUBLIC"), shareSourceText: z.boolean() }),
+  z.object({ visibility: z.literal("PRIVATE") }),
+]);
+
+/** Community Catalog listing and keyword search (REQ-CAT-012). */
+export const listPublicCardsQuerySchema = z.object({
+  q: z
+    .string()
+    .trim()
+    .max(500, "must be at most 500 characters")
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(20),
+});
+
 export type CreateCardInput = z.infer<typeof createCardSchema>;
+export type SetVisibilityInput = z.infer<typeof setVisibilitySchema>;
+export type ListPublicCardsQuery = z.infer<typeof listPublicCardsQuerySchema>;
 export type UpdateNotesInput = z.infer<typeof updateNotesSchema>;
 export type UpdateAiMetadataInput = z.infer<typeof updateAiMetadataSchema>;
 export type ListCardsQuery = z.infer<typeof listCardsQuerySchema>;

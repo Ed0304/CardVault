@@ -2,7 +2,7 @@
 -- Idempotent: safe to run more than once (every migration runs on every `npm run migrate`).
 -- References the existing users table (001_create_users.sql) and never alters it.
 -- No pgvector: the embedding column belongs to the future Semantic Retrieval milestone
--- (002_enable_pgvector.sql and 004_add_embedding_column.sql in the catalog design).
+-- (002_enable_pgvector.sql and 006_add_embedding_column.sql in the catalog design).
 
 CREATE TABLE IF NOT EXISTS collections (
     id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),

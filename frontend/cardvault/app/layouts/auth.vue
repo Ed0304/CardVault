@@ -11,7 +11,7 @@
 
       <p class="auth-shell__note">
         <CommonAppIcon name="lock" :size="14" />
-        Private by design. Your cards are visible only to you.
+        Private by default. Your cards are visible only to you unless you publish them.
       </p>
     </main>
   </div>

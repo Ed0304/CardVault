@@ -3,6 +3,7 @@ import type {
   CreateCardPayload,
   KnowledgeCard,
   PaginatedResult,
+  SetVisibilityPayload,
   UpdateAiMetadataPayload,
 } from '~/types/card'
 import { apiFetch } from './api'
@@ -30,6 +31,10 @@ export const catalogService = {
   /** Puts the card in a collection, or takes it out with null. */
   setCollection: (id: string, collectionId: string | null) =>
     apiFetch<KnowledgeCard>(`/cards/${id}/collection`, { method: 'PATCH', body: { collectionId } }),
+
+  /** Publishes the card to the Community Catalog, or makes it private again. */
+  setVisibility: (id: string, payload: SetVisibilityPayload) =>
+    apiFetch<KnowledgeCard>(`/cards/${id}/visibility`, { method: 'PATCH', body: { ...payload } }),
 
   addTag: (id: string, tagId: string) =>
     apiFetch<KnowledgeCard>(`/cards/${id}/tags/${tagId}`, { method: 'POST' }),

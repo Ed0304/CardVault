@@ -6,6 +6,19 @@ import type { Collection, Tag } from './collection'
  */
 export type AiStatus = 'PENDING' | 'COMPLETE' | 'FAILED' | 'NOT_AVAILABLE'
 
+/** PRIVATE: only the owner sees the card. PUBLIC: listed in the Community Catalog. */
+export type CardVisibility = 'PRIVATE' | 'PUBLIC'
+
+/** Attribution on a card saved from the Community Catalog. */
+export interface SavedFrom {
+  /** The original card's id, kept even after the original is deleted. */
+  cardId: string
+  /** The original author's username when the card was saved. */
+  authorUsername: string
+  /** Whether the original is still published (and can be linked to). */
+  originalAvailable: boolean
+}
+
 /** Fields shown in list views. */
 export interface CardSummary {
   id: string
@@ -19,6 +32,10 @@ export interface CardSummary {
   aiEmbeddingStatus: AiStatus
   collection: Collection | null
   tags: Tag[]
+  visibility: CardVisibility
+  publishedAt: string | null
+  /** Set when the card is a copy saved from the Community Catalog. */
+  savedFrom: SavedFrom | null
   createdAt: string
 }
 
@@ -28,8 +45,15 @@ export interface KnowledgeCard extends CardSummary {
   sourceMeta: Record<string, unknown> | null
   notes: string | null
   aiKeywords: string[]
+  /** Whether the public card includes the original text (meaningful while PUBLIC). */
+  shareSourceText: boolean
   updatedAt: string
 }
+
+/** Publishing always states whether the original text is shared; unpublishing needs nothing. */
+export type SetVisibilityPayload =
+  | { visibility: 'PUBLIC'; shareSourceText: boolean }
+  | { visibility: 'PRIVATE' }
 
 export interface CreateCardPayload {
   sourceText: string

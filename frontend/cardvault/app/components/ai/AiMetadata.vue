@@ -5,8 +5,11 @@ const props = defineProps<{
   summary: string | null
   subjects: string[]
   keywords: string[]
-  /** Catalog-generation status. Metadata is shown whenever it exists, whatever this is. */
-  status: AiStatus
+  /**
+   * Catalog-generation status. Metadata is shown whenever it exists, whatever this is. Omitted
+   * on public cards, which do not expose processing statuses.
+   */
+  status?: AiStatus
 }>()
 
 const hasMetadata = computed(
@@ -24,7 +27,8 @@ const hasMetadata = computed(
       </div>
     </div>
 
-    <AiProcessingStatus :status="status" />
+    <AiProcessingStatus v-if="status" :status="status" />
+    <p v-else-if="!hasMetadata" class="text-muted">No catalog details yet.</p>
 
     <div v-if="hasMetadata" class="ai-metadata__body">
       <p v-if="summary" class="ai-metadata__summary">{{ summary }}</p>

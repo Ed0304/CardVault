@@ -1,8 +1,18 @@
 <script setup lang="ts">
 import type { SearchMode } from '~/types/card'
 
+withDefaults(
+  defineProps<{
+    label?: string
+    /** The search-mode selector applies to the vault search only. */
+    showModes?: boolean
+  }>(),
+  { label: 'Search your catalog', showModes: true },
+)
+
 const query = defineModel<string>({ default: '' })
 const mode = ref<SearchMode>('auto')
+const inputId = `catalog-search-${useId()}`
 
 const emit = defineEmits<{ search: [query: string, mode: SearchMode] }>()
 </script>
@@ -10,19 +20,20 @@ const emit = defineEmits<{ search: [query: string, mode: SearchMode] }>()
 <template>
   <form class="catalog-search" role="search" @submit.prevent="emit('search', query, mode)">
     <div class="catalog-search__field">
-      <label for="catalog-search-input" class="visually-hidden">Search your catalog</label>
+      <label :for="inputId" class="visually-hidden">{{ label }}</label>
       <CommonAppIcon name="search" :size="18" class="catalog-search__icon" />
       <input
-        id="catalog-search-input"
+        :id="inputId"
         v-model="query"
         class="catalog-search__input"
         type="search"
-        placeholder="Search your catalog"
+        :placeholder="label"
+        maxlength="500"
         autocomplete="off"
       />
     </div>
 
-    <div class="catalog-search__mode">
+    <div v-if="showModes" class="catalog-search__mode">
       <label for="catalog-search-mode" class="visually-hidden">Search mode</label>
       <select id="catalog-search-mode" v-model="mode" class="catalog-search__select">
         <option value="auto">Auto</option>

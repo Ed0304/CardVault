@@ -14,7 +14,7 @@ export interface NavLink {
 export const primaryNavLinks: NavLink[] = [
   {
     to: '/catalog',
-    label: 'Catalog',
+    label: 'My Vault',
     icon: 'catalog',
     requiresAuth: true,
     isActive: (path) =>
@@ -33,6 +33,13 @@ export const primaryNavLinks: NavLink[] = [
     icon: 'folder',
     requiresAuth: true,
     isActive: (path) => path.startsWith('/collections'),
+  },
+  {
+    to: '/community',
+    label: 'Community',
+    icon: 'globe',
+    requiresAuth: true,
+    isActive: (path) => path.startsWith('/community'),
   },
 ]
 

@@ -6,6 +6,7 @@ import { validateBody } from "../middleware/validateBody.js";
 import {
   createCardSchema,
   setCollectionSchema,
+  setVisibilitySchema,
   updateAiMetadataSchema,
   updateNotesSchema,
 } from "../schemas/cards.schemas.js";
@@ -21,6 +22,9 @@ router.get("/:id", cardController.get);
 router.patch("/:id/notes", validateBody(updateNotesSchema), cardController.updateNotes);
 router.patch("/:id/ai-metadata", validateBody(updateAiMetadataSchema), cardController.updateAiMetadata);
 router.delete("/:id", cardController.remove);
+
+// Publishing to the Community Catalog (owner only, like every route here).
+router.patch("/:id/visibility", validateBody(setVisibilitySchema), cardController.setVisibility);
 
 // Organisation: one collection per card, any number of tags.
 router.patch("/:id/collection", validateBody(setCollectionSchema), cardController.setCollection);

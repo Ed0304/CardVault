@@ -1,6 +1,6 @@
 import { describeApiError, type ApiErrorMessages } from '~/services/api'
 import { catalogService } from '~/services/catalog.service'
-import type { CardSummary, CreateCardPayload, KnowledgeCard } from '~/types/card'
+import type { CardSummary, CreateCardPayload, KnowledgeCard, SetVisibilityPayload } from '~/types/card'
 
 export interface CardFilters {
   collectionId?: string
@@ -90,6 +90,16 @@ export const useCatalog = () => {
       'That card or collection no longer exists. Reload the page and try again.',
     )
 
+  /** Publishes the card to the Community Catalog, or makes it private again. */
+  const setVisibility = (id: string, payload: SetVisibilityPayload) =>
+    organise(
+      () => catalogService.setVisibility(id, payload),
+      payload.visibility === 'PUBLIC'
+        ? "The card couldn't be published. Please try again."
+        : "The card couldn't be made private. Please try again.",
+      'This card no longer exists. Reload the page and try again.',
+    )
+
   const applyTag = (id: string, tagId: string) =>
     organise(
       () => catalogService.addTag(id, tagId),
@@ -115,6 +125,7 @@ export const useCatalog = () => {
     createCardFromUrl,
     deleteCard,
     setCollection,
+    setVisibility,
     applyTag,
     removeTag,
   }

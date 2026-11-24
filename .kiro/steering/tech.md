@@ -55,12 +55,11 @@ inclusion: always
 5. Future Semantic Retrieval milestone: pgvector stores and queries card embeddings within PostgreSQL — no separate vector database. pgvector is not an MVP prerequisite.
 6. No Redis, message brokers, Kubernetes, or additional databases without a documented requirement.
 7. Express accesses PostgreSQL with raw SQL through the `pg` pool. Prisma is not used.
-8. Authentication is stateless: a JWT in an HttpOnly cookie. There is no server-side session store.
-   Logout clears the cookie only. Token revocation/denylists and refresh tokens are out of scope for the MVP;
-   a previously copied token stays valid until it expires (access tokens last 15 minutes).
+8. Authentication uses a short-lived access JWT (15 minutes, HttpOnly `cv_token` cookie) and a rotating opaque refresh token (HttpOnly `cv_refresh` cookie, `migrations/004_create_refresh_tokens.sql`). Only the refresh token's SHA-256 hash is stored. A login lasts up to 7 days without use and 30 days at most; reuse of a rotated token after a 30-second grace period revokes the whole login. Logout revokes the login's refresh tokens and clears both cookies. An already-issued access token stays valid until it expires; there is no access-token denylist.
 9. Search is owned by Express and PostgreSQL. The MVP search is PostgreSQL keyword search and needs no embeddings, pgvector or AI service. In the future Semantic Retrieval milestone, Express runs the similarity queries and PostgreSQL (pgvector) stores vectors and computes and ranks similarity. FastAPI has no database access, no similarity-search implementation and no similarity endpoint. FastAPI may only generate embeddings (future). The intended default search mode for the future milestone is `auto` (semantic search with keyword fallback); decision D-11 is resolved in that direction.
 10. The intended runtime AI provider is Meta Model API (Muse family), chosen by the project owner. Muse Spark (`muse-spark-1.3`, Standard mode) handles cataloging, summaries, keyword extraction, reasoning and image understanding. Muse Image (`muse-image-1.0`) handles optional image generation and editing. Video generation is out of scope. FastAPI calls the provider; Express never does. No second hosted AI provider is introduced. The embedding provider is deferred to the future Semantic Retrieval milestone, with local inference in FastAPI as the preferred direction (Meta's published model catalog lists no embedding model). Embedding model and runtime selection are not MVP prerequisites. Provider facts are documented but unverified for this project; see the ai-cataloging design. Kiro's development-time AI is not a runtime dependency.
 11. AI processing has two independent statuses per card: catalog generation (summary, subjects, keywords) and embedding generation. Each can be `PENDING`, `COMPLETE`, `FAILED` or `NOT_AVAILABLE` (not implemented or not enabled). In the MVP the embedding status is `NOT_AVAILABLE`, which is not a processing failure. (The state set is proposed; see the ai-cataloging design.)
+12. Community Catalog (catalog-management REQ-CAT-011 to REQ-CAT-014): cards carry a `visibility` of `PRIVATE` (default) or `PUBLIC`. The `/api/community` endpoints require a signed-in user, read only `PUBLIC` cards, and select an explicit list of public columns in `communityService.ts`; they never serialize a full card row. Saving a published card creates an independent copy owned by the saver, in one transaction, with provenance columns on the copy and no foreign key to the original.
 
 ## API Communication
 
@@ -85,6 +84,7 @@ inclusion: always
 - Future Semantic Retrieval milestone (not an MVP prerequisite): pgvector is enabled by a SQL migration (`CREATE EXTENSION IF NOT EXISTS vector;`). Embeddings are `vector` columns on the cards table. `pg` has no native vector type, so vectors are written and read as text (e.g. `$1::vector` with `'[0.1,0.2]'`).
 - MVP search is keyword search over the cards table and does not depend on pgvector.
 - All database queries in Express are scoped to `user_id`, taken from the verified JWT (`req.user.id`), never from the request body.
+- The one exception is the Community Catalog's read queries, which are scoped to `visibility = 'PUBLIC'` instead and return only the approved public columns. Every write, including saving a copy, is still scoped to the signed-in user.
 
 ## AI Integration Strategy
 
@@ -103,7 +103,8 @@ inclusion: always
 ## Security Principles
 
 - Never trust `userId` from frontend requests for authorization — always derive it from the verified JWT subject (`req.user.id`).
-- All user data queries include a `userId` scope at the database layer.
+- All user data queries include a `userId` scope at the database layer (Community Catalog reads: `visibility = 'PUBLIC'` and public columns only; see Database Strategy).
+- Public responses never include personal notes, collections, tags, AI processing statuses, owner ids or email addresses. Source text is public only when the owner chose to share it, and community search does not match unshared source text.
 - URL ingestion restricted to HTTP/HTTPS only.
 - Validate resolved IP addresses against SSRF blocklist (private ranges, loopback, link-local).
 - Apply request timeouts and response-size limits on external URL fetches.

@@ -22,6 +22,9 @@ export const iconPaths = {
   info: 'M12 11v5M12 8v.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
   'file-text': 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h6',
   pencil: 'M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16z',
+  globe: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18',
+  bookmark: 'M6 3h12v18l-6-4-6 4z',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
 } as const
 
 export type IconName = keyof typeof iconPaths
