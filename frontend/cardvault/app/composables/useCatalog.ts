@@ -1,6 +1,11 @@
-import { describeApiError, getApiStatus, type ApiErrorMessages } from '~/services/api'
+import { describeApiError, type ApiErrorMessages } from '~/services/api'
 import { catalogService } from '~/services/catalog.service'
 import type { CardSummary, CreateCardPayload, KnowledgeCard } from '~/types/card'
+
+export interface CardFilters {
+  collectionId?: string
+  tagId?: string
+}
 
 export const useCatalog = () => {
   const cards = useState<CardSummary[]>('catalog:cards', () => [])
@@ -20,21 +25,12 @@ export const useCatalog = () => {
     }
   }
 
-  const fetchCards = () =>
+  // An empty library is a normal state: the list endpoint answers 200 with no items
+  // (REQ-CAT-003), and the page shows the "add your first card" prompt.
+  const fetchCards = (filters: CardFilters = {}) =>
     run(
       async () => {
-        try {
-          cards.value = (await catalogService.list()).items
-        } catch (e) {
-          // An empty library is a normal state, not an error: the list endpoint answers 200 with
-          // no items (REQ-CAT-003). Until the catalog API is deployed the endpoint does not exist
-          // and answers 404, which for the user means the same thing: there are no cards yet.
-          if (getApiStatus(e) === 404) {
-            cards.value = []
-            return
-          }
-          throw e
-        }
+        cards.value = (await catalogService.list(filters)).items
       },
       { fallback: "Your catalog couldn't be loaded. Please try again." },
     )
@@ -67,11 +63,45 @@ export const useCatalog = () => {
       async () => {
         await catalogService.remove(id)
         cards.value = cards.value.filter((c) => c.id !== id)
+        return true
       },
       {
         notFound: 'This card no longer exists.',
         fallback: "The card couldn't be deleted. Please try again.",
       },
+    )
+
+  /** Applies an organisation change to the open card from the updated card the API returns. */
+  const organise = (action: () => Promise<KnowledgeCard>, fallback: string, notFound: string) =>
+    run(
+      async () => {
+        const updated = await action()
+        card.value = updated
+        cards.value = cards.value.map((c) => (c.id === updated.id ? updated : c))
+        return updated
+      },
+      { fallback, notFound },
+    )
+
+  const setCollection = (id: string, collectionId: string | null) =>
+    organise(
+      () => catalogService.setCollection(id, collectionId),
+      "The collection couldn't be changed. Please try again.",
+      'That card or collection no longer exists. Reload the page and try again.',
+    )
+
+  const applyTag = (id: string, tagId: string) =>
+    organise(
+      () => catalogService.addTag(id, tagId),
+      "The tag couldn't be added. Please try again.",
+      'That card or tag no longer exists. Reload the page and try again.',
+    )
+
+  const removeTag = (id: string, tagId: string) =>
+    organise(
+      () => catalogService.removeTag(id, tagId),
+      "The tag couldn't be removed. Please try again.",
+      'That card or tag no longer exists. Reload the page and try again.',
     )
 
   return {
@@ -84,5 +114,8 @@ export const useCatalog = () => {
     createCard,
     createCardFromUrl,
     deleteCard,
+    setCollection,
+    applyTag,
+    removeTag,
   }
 }

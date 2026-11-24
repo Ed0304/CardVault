@@ -44,8 +44,8 @@ The MVP AI work is complete when all of the following hold:
 
 ## Status Model and Unavailable-Operation Handling (MVP, independent of the AI provider)
 
-- [ ] **[INDEPENDENT; needs D-8, D-9]** **TASK-AI-018** In `cardService.createCard`, set `ai_embedding_status` to `NOT_AVAILABLE` for every card. Set `ai_catalog_status` to `PENDING` when catalog generation is enabled and to `NOT_AVAILABLE` when it is not implemented or not enabled; make no AI call in the latter case. Depends on TASK-CAT-002 and TASK-CAT-007.
-- [ ] **[INDEPENDENT; needs D-8]** **TASK-AI-019** Update the frontend types and components that use a single `aiStatus` (`types/card.ts`, `components/ai/AiProcessingStatus.vue`, `components/ai/AiMetadata.vue`, `components/catalog/KnowledgeCard.vue`, `pages/catalog/[id].vue`) to use the two statuses and to show metadata whenever it exists.
+- [x] **[INDEPENDENT; D-8, D-9 resolved]** **TASK-AI-018** In `cardService.createCard`, set `ai_embedding_status` to `NOT_AVAILABLE` for every card. Set `ai_catalog_status` to `PENDING` when catalog generation is enabled and to `NOT_AVAILABLE` when it is not implemented or not enabled; make no AI call in the latter case. Depends on TASK-CAT-002 and TASK-CAT-007.
+- [x] **[INDEPENDENT; D-8 resolved]** **TASK-AI-019** Update the frontend types and components that use a single `aiStatus` (`types/card.ts`, `components/ai/AiProcessingStatus.vue`, `components/ai/AiMetadata.vue`, `components/catalog/KnowledgeCard.vue`, `pages/catalog/[id].vue`) to use the two statuses and to show metadata whenever it exists.
 
 ## Future Milestone: Semantic Retrieval (not an MVP prerequisite)
 

@@ -1,4 +1,5 @@
 import { useAuthStore } from '~/stores/auth.store'
+import { refreshInBrowser } from './session'
 
 export interface ApiResponse<T> {
   data: T
@@ -54,7 +55,11 @@ export function describeApiError(err: unknown, messages: ApiErrorMessages): stri
  * Thin wrapper around $fetch for the Express API.
  * Unwraps the { data, error, message } envelope and returns `data`.
  */
-export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  options: ApiOptions = {},
+  isRetry = false,
+): Promise<T> {
   const nuxtApp = useNuxtApp()
   const config = useRuntimeConfig()
   const baseURL = (config.public.apiBase as string | undefined) ?? 'http://localhost:4000/api'
@@ -71,10 +76,18 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
     })
     return response.data
   } catch (err) {
-    // A 401 from a protected endpoint means the session expired (tokens last 15 minutes).
-    // Sign the user out locally and send them to log in, then back to where they were.
-    // Auth endpoints are excluded: their 401s are handled by the login form and fetchUser.
+    // A 401 from a protected endpoint means the 15-minute access cookie expired. In the browser,
+    // use the refresh cookie once and retry the request. Only if that fails is the user signed
+    // out and sent to log in, then back to where they were. Auth endpoints are excluded: their
+    // 401s are handled by the login form and by restoreSession.
     if (getApiStatus(err) === 401 && !path.startsWith('/auth/')) {
+      if (import.meta.client && !isRetry) {
+        const { outcome, user } = await refreshInBrowser(baseURL)
+        if (outcome !== 'signed-out') {
+          if (user) nuxtApp.runWithContext(() => useAuthStore().setUser(user))
+          return apiFetch<T>(path, options, true)
+        }
+      }
       await nuxtApp.runWithContext(async () => {
         useAuthStore().setUser(null)
         if (import.meta.client) {

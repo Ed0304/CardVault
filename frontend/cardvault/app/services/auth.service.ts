@@ -10,5 +10,8 @@ export const authService = {
 
   logout: () => apiFetch<null>('/auth/logout', { method: 'POST' }),
 
+  /** Exchanges the refresh cookie for new session cookies. */
+  refresh: () => apiFetch<AuthResponse>('/auth/refresh', { method: 'POST' }),
+
   me: async () => (await apiFetch<{ user: User }>('/auth/me')).user,
 }

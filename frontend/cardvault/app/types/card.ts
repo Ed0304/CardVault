@@ -1,6 +1,10 @@
 import type { Collection, Tag } from './collection'
 
-export type AiStatus = 'PENDING' | 'COMPLETE' | 'FAILED'
+/**
+ * Status of one AI operation. NOT_AVAILABLE means the operation is not implemented or not
+ * enabled, so it was not attempted. It is not a failure.
+ */
+export type AiStatus = 'PENDING' | 'COMPLETE' | 'FAILED' | 'NOT_AVAILABLE'
 
 /** Fields shown in list views. */
 export interface CardSummary {
@@ -9,7 +13,10 @@ export interface CardSummary {
   sourceUrl: string | null
   aiSummary: string | null
   aiSubjects: string[]
-  aiStatus: AiStatus
+  /** Summary, subjects and keywords. */
+  aiCatalogStatus: AiStatus
+  /** Vector embedding (future Semantic Retrieval milestone; NOT_AVAILABLE in the MVP). */
+  aiEmbeddingStatus: AiStatus
   collection: Collection | null
   tags: Tag[]
   createdAt: string

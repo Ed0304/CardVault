@@ -34,6 +34,23 @@ jest.unstable_mockModule("../src/services/userService.js", () => ({
     users.find((u) => u.id === id) ?? null,
 }));
 
+// Refresh tokens need PostgreSQL; their behaviour is covered by session.integration.test.ts.
+// Here they are stubbed so these tests stay database-free.
+const refreshCalls = { revoked: [] as string[] };
+jest.unstable_mockModule("../src/services/refreshTokenService.js", () => ({
+  issueRefreshToken: async () => ({
+    token: "stub-refresh-token",
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  }),
+  REFRESH_SUPERSEDED: "REFRESH_SUPERSEDED",
+  rotateRefreshToken: async () => {
+    throw new Error("not used in this file");
+  },
+  revokeRefreshTokenFamily: async (token: string) => {
+    refreshCalls.revoked.push(token);
+  },
+}));
+
 const { default: app } = await import("../src/app.js");
 const { authenticate } = await import("../src/middleware/authenticate.js");
 const { errorHandler } = await import("../src/middleware/errorHandler.js");
@@ -247,6 +264,24 @@ describe("cookie session: GET /api/auth/me and POST /api/auth/logout", () => {
     const cookie = authCookie(res);
     expect(cookie).toMatch(/^cv_token=;/);
     expect(cookie).toMatch(/Expires=Thu, 01 Jan 1970/);
+  });
+
+  it("sets a refresh cookie on registration and revokes it on logout", async () => {
+    const reg = await request(app).post("/api/auth/register").send(validUser);
+    const setCookie = ([] as string[]).concat(reg.headers["set-cookie"] ?? []);
+    const refresh = setCookie.find((c) => c.startsWith("cv_refresh="));
+    expect(refresh).toMatch(/HttpOnly/i);
+    expect(refresh).toMatch(/SameSite=Lax/i);
+    expect(refresh).toMatch(/Path=\//);
+    expect(JSON.stringify(reg.body)).not.toMatch(/stub-refresh-token/);
+
+    const out = await request(app)
+      .post("/api/auth/logout")
+      .set("Cookie", "cv_refresh=stub-refresh-token");
+    expect(out.status).toBe(200);
+    expect(refreshCalls.revoked).toContain("stub-refresh-token");
+    const cleared = ([] as string[]).concat(out.headers["set-cookie"] ?? []);
+    expect(cleared.find((c) => c.startsWith("cv_refresh="))).toMatch(/^cv_refresh=;/);
   });
 });
 

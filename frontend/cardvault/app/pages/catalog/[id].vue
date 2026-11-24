@@ -8,8 +8,8 @@ onMounted(() => fetchCard(id.value))
 
 const onDelete = async () => {
   if (!window.confirm('Delete this card permanently?')) return
-  await deleteCard(id.value)
-  await navigateTo('/catalog')
+  // Leave the page only when the delete succeeded; otherwise the error stays visible here.
+  if (await deleteCard(id.value)) await navigateTo('/catalog')
 }
 
 /** Source metadata entries that can be shown as plain text. */
@@ -102,7 +102,7 @@ const sourceMetaEntries = computed(() =>
             :summary="card.aiSummary"
             :subjects="card.aiSubjects"
             :keywords="card.aiKeywords"
-            :status="card.aiStatus"
+            :status="card.aiCatalogStatus"
           />
         </aside>
       </div>

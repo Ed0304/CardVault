@@ -316,12 +316,12 @@ Not decided by this document. "Scope" says whether the decision gates MVP work.
 | D-1 | Stale `PENDING` recovery and timeout policy | MVP |
 | D-2 | Retry for `FAILED`; backfill of `NOT_AVAILABLE` cards | MVP (catalog); future (embeddings) |
 | D-3 | Mechanism preventing AI results from overwriting user edits | MVP |
-| D-4 | Maximum text input length | MVP |
+| D-4 | Maximum text input length. **Provisional:** 100,000 characters per card (`MAX_SOURCE_TEXT_LENGTH`), with a matching JSON body limit on `/api/cards` only. The limit for text sent to the AI provider is still open (V-5) | MVP |
 | D-5 | Internal Express-to-FastAPI authentication | MVP |
 | D-6 | Embedding dimension and vector schema | Future milestone |
 | D-7 | Whether embedding generation is independent of catalog generation at the API level, including the `card_id` contract for query embeddings | Future milestone |
-| D-8 | Status value set, column names, nullability and defaults | MVP |
-| D-9 | How Express determines that catalog generation is not implemented or not enabled, and the initial status of a new card | MVP |
+| D-8 | **Resolved:** columns `ai_catalog_status` and `ai_embedding_status`, both `TEXT NOT NULL` with a CHECK for `PENDING`, `COMPLETE`, `FAILED`, `NOT_AVAILABLE`, and no database default (`migrations/003_create_catalog_tables.sql`) | MVP |
+| D-9 | **Resolved for now:** the service sets both statuses to `NOT_AVAILABLE` on insert (`initialAiStatuses()` in `cardService.ts`), because no AI integration exists. When catalog generation is implemented, the catalog status becomes `PENDING` while it is enabled. How "enabled" is configured is decided with TASK-AI-013 | MVP |
 | D-10 | MVP search API and UI shape while only keyword search exists: whether `GET /api/search` accepts `mode`, what `semantic` and `auto` do before the milestone, and what the frontend mode selector shows | MVP |
 | D-11 | **Resolved by the project owner:** `auto` (semantic with keyword fallback) is the intended future default search mode. It applies when semantic search exists; the MVP default is covered by D-10 | Future milestone |
 | D-12 | **Deferred:** embedding provider. Local inference in FastAPI is the preferred direction; no model or runtime is selected | Future milestone |

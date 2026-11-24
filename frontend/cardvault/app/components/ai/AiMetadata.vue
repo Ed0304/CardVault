@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import type { AiStatus } from '~/types/card'
 
-defineProps<{
+const props = defineProps<{
   summary: string | null
   subjects: string[]
   keywords: string[]
+  /** Catalog-generation status. Metadata is shown whenever it exists, whatever this is. */
   status: AiStatus
 }>()
+
+const hasMetadata = computed(
+  () => Boolean(props.summary) || props.subjects.length > 0 || props.keywords.length > 0,
+)
 </script>
 
 <template>
@@ -21,7 +26,7 @@ defineProps<{
 
     <AiProcessingStatus :status="status" />
 
-    <div v-if="status === 'COMPLETE'" class="ai-metadata__body">
+    <div v-if="hasMetadata" class="ai-metadata__body">
       <p v-if="summary" class="ai-metadata__summary">{{ summary }}</p>
 
       <div v-if="subjects.length" class="ai-metadata__group">

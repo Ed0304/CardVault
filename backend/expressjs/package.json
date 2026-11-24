@@ -33,6 +33,7 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "migrate": "tsx scripts/migrate.ts",
+    "db:test:setup": "tsx scripts/setup-test-db.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   }
 }

@@ -30,4 +30,15 @@ export const config = {
     algorithm: "HS256",
     expiresInSeconds: 15 * 60,
   },
+  refresh: {
+    /** A session ends after this long without a refresh (idle limit). */
+    idleSeconds: 7 * 24 * 60 * 60,
+    /** A session ends this long after login, however active it is (absolute limit). */
+    absoluteSeconds: 30 * 24 * 60 * 60,
+    /**
+     * A token used again within this many seconds of being rotated is treated as a harmless
+     * race (two tabs refreshing at once), not as theft.
+     */
+    reuseGraceSeconds: 30,
+  },
 } as const;

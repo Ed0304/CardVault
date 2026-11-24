@@ -14,12 +14,14 @@ const labels: Record<AiStatus, string> = {
   PENDING: 'AI cataloging in progress…',
   COMPLETE: 'AI cataloging complete',
   FAILED: 'AI cataloging failed. Your original content is safe.',
+  NOT_AVAILABLE: 'AI cataloging is not available yet. You can add catalog details yourself.',
 }
 
 const compactLabels: Record<AiStatus, string> = {
   PENDING: 'Cataloging',
   COMPLETE: 'Cataloged',
   FAILED: 'AI failed',
+  NOT_AVAILABLE: 'Not cataloged',
 }
 </script>
 
@@ -61,6 +63,10 @@ const compactLabels: Record<AiStatus, string> = {
 }
 .ai-status--failed {
   color: var(--error-text);
+}
+/* Neutral: the operation was not attempted, which is not an error. */
+.ai-status--not_available {
+  color: var(--text-muted);
 }
 @keyframes ai-pulse {
   50% {

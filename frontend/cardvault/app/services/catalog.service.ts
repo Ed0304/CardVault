@@ -27,5 +27,15 @@ export const catalogService = {
 
   remove: (id: string) => apiFetch<null>(`/cards/${id}`, { method: 'DELETE' }),
 
+  /** Puts the card in a collection, or takes it out with null. */
+  setCollection: (id: string, collectionId: string | null) =>
+    apiFetch<KnowledgeCard>(`/cards/${id}/collection`, { method: 'PATCH', body: { collectionId } }),
+
+  addTag: (id: string, tagId: string) =>
+    apiFetch<KnowledgeCard>(`/cards/${id}/tags/${tagId}`, { method: 'POST' }),
+
+  removeTag: (id: string, tagId: string) =>
+    apiFetch<KnowledgeCard>(`/cards/${id}/tags/${tagId}`, { method: 'DELETE' }),
+
   related: (id: string) => apiFetch<{ items: CardSummary[] }>(`/cards/${id}/related`),
 }

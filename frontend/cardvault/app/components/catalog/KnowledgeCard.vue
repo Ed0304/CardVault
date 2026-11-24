@@ -14,7 +14,7 @@ const hiddenSubjectCount = computed(() => Math.max(0, props.card.aiSubjects.leng
   <article class="kcard">
     <div class="kcard__strip">
       <span class="mono kcard__number">No. {{ shortId(card.id) }}</span>
-      <AiProcessingStatus :status="card.aiStatus" compact />
+      <AiProcessingStatus :status="card.aiCatalogStatus" compact />
     </div>
 
     <div class="kcard__body">

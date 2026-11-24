@@ -3,12 +3,18 @@ const { createCard, createCardFromUrl, isLoading, error } = useCatalog()
 
 const tab = ref<'text' | 'url'>('text')
 const sourceText = ref('')
+const sourceTitle = ref('')
+const textSourceUrl = ref('')
 const sourceUrl = ref('')
 
 const onSubmit = async () => {
   const card =
     tab.value === 'text'
-      ? await createCard({ sourceText: sourceText.value })
+      ? await createCard({
+          sourceText: sourceText.value,
+          sourceTitle: sourceTitle.value.trim() || undefined,
+          sourceUrl: textSourceUrl.value.trim() || undefined,
+        })
       : await createCardFromUrl(sourceUrl.value)
 
   if (card) await navigateTo(`/catalog/${card.id}`)
@@ -38,16 +44,35 @@ const onSubmit = async () => {
           </div>
         </fieldset>
 
-        <CommonAppInput
-          v-if="tab === 'text'"
-          key="text"
-          v-model="sourceText"
-          label="Content"
-          multiline
-          required
-          rows="12"
-          hint="Saved exactly as written. The original is never modified."
-        />
+        <template v-if="tab === 'text'">
+          <CommonAppInput
+            key="text"
+            v-model="sourceText"
+            label="Content"
+            multiline
+            required
+            rows="12"
+            maxlength="100000"
+            hint="Saved exactly as written. The original is never modified."
+          />
+          <CommonAppInput
+            key="title"
+            v-model="sourceTitle"
+            label="Title"
+            optional
+            maxlength="300"
+            hint="Leave empty to use the first line of the content."
+          />
+          <CommonAppInput
+            key="text-url"
+            v-model="textSourceUrl"
+            label="Source URL"
+            type="url"
+            optional
+            placeholder="https://"
+            hint="Where this text came from, if anywhere."
+          />
+        </template>
         <CommonAppInput
           v-else
           key="url"
