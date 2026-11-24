@@ -1,3 +1,4 @@
+import { describeApiError } from '~/services/api'
 import { searchService } from '~/services/search.service'
 import type { SearchMode, SearchResult } from '~/types/card'
 
@@ -21,7 +22,10 @@ export const useSearch = () => {
       results.value = response.items
       isFallback.value = response.fallback
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Search failed'
+      error.value = describeApiError(e, {
+        notFound: "Search isn't available yet.",
+        fallback: "Search didn't work. Please try again.",
+      })
     } finally {
       isLoading.value = false
     }

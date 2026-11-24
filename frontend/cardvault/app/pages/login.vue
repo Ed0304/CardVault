@@ -1,6 +1,10 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'auth' })
+import { getApiStatus } from '~/services/api'
+import { safeRedirectPath } from '~/utils/navigation'
 
+definePageMeta({ layout: 'auth', guestOnly: true })
+
+const route = useRoute()
 const { login } = useAuth()
 
 const email = ref('')
@@ -8,14 +12,21 @@ const password = ref('')
 const error = ref<string | null>(null)
 const isSubmitting = ref(false)
 
+/** Set when the route guard sent the visitor here from a signed-in-only page. */
+const wasRedirected = computed(() => typeof route.query.redirect === 'string')
+
 const onSubmit = async () => {
   isSubmitting.value = true
   error.value = null
   try {
     await login({ email: email.value, password: password.value })
-    await navigateTo('/catalog')
-  } catch {
-    error.value = 'Invalid credentials.'
+    await navigateTo(safeRedirectPath(route.query.redirect))
+  } catch (err) {
+    const status = getApiStatus(err)
+    error.value =
+      status === 401 || status === 400
+        ? 'Invalid credentials.'
+        : "CardVault couldn't reach the server. Please try again in a moment."
   } finally {
     isSubmitting.value = false
   }
@@ -30,6 +41,9 @@ const onSubmit = async () => {
     </header>
 
     <CommonAppAlert v-if="error">{{ error }}</CommonAppAlert>
+    <CommonAppAlert v-else-if="wasRedirected" variant="info">
+      Log in to open that page. Your library is private to your account.
+    </CommonAppAlert>
 
     <CommonAppInput
       v-model="email"
@@ -51,7 +65,9 @@ const onSubmit = async () => {
       {{ isSubmitting ? 'Logging in…' : 'Log in' }}
     </CommonAppButton>
 
-    <p class="auth-form__footer">No account? <NuxtLink to="/register">Register</NuxtLink></p>
+    <p class="auth-form__footer">
+      No account? <NuxtLink :to="{ path: '/register', query: route.query }">Register</NuxtLink>
+    </p>
   </form>
 </template>
 

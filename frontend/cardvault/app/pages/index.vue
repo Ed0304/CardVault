@@ -1,5 +1,7 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'landing' })
+definePageMeta({ layout: 'landing', public: true })
+
+const { isAuthenticated } = useAuth()
 
 const steps = [
   {
@@ -56,11 +58,17 @@ const layers = [
           by AI, and found again by meaning.
         </p>
         <div class="hero__actions">
-          <CommonAppButton to="/catalog">
+          <CommonAppButton v-if="isAuthenticated" to="/catalog">
             Open your catalog
             <CommonAppIcon name="arrow-right" :size="18" />
           </CommonAppButton>
-          <CommonAppButton to="/register" variant="secondary">Create an account</CommonAppButton>
+          <template v-else>
+            <CommonAppButton to="/login?redirect=%2Fcatalog">
+              <CommonAppIcon name="lock" :size="18" />
+              Log in to your catalog
+            </CommonAppButton>
+            <CommonAppButton to="/register" variant="secondary">Create an account</CommonAppButton>
+          </template>
         </div>
       </div>
 

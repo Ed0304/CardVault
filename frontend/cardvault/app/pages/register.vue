@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { getApiErrorMessage } from '~/services/api'
+import { describeApiError } from '~/services/api'
+import { safeRedirectPath } from '~/utils/navigation'
 
-definePageMeta({ layout: 'auth' })
+definePageMeta({ layout: 'auth', guestOnly: true })
 
+const route = useRoute()
 const { register } = useAuth()
 
 const username = ref('')
@@ -20,12 +22,11 @@ const onSubmit = async () => {
       email: email.value,
       password: password.value,
     })
-    await navigateTo('/catalog')
+    await navigateTo(safeRedirectPath(route.query.redirect))
   } catch (err) {
-    error.value = getApiErrorMessage(
-      err,
-      'Could not create the account. Check your details and try again.',
-    )
+    error.value = describeApiError(err, {
+      fallback: 'Could not create the account. Check your details and try again.',
+    })
   } finally {
     isSubmitting.value = false
   }
@@ -73,7 +74,9 @@ const onSubmit = async () => {
       {{ isSubmitting ? 'Creating account…' : 'Register' }}
     </CommonAppButton>
 
-    <p class="auth-form__footer">Already registered? <NuxtLink to="/login">Log in</NuxtLink></p>
+    <p class="auth-form__footer">
+      Already registered? <NuxtLink :to="{ path: '/login', query: route.query }">Log in</NuxtLink>
+    </p>
   </form>
 </template>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { primaryNavLinks } from '~/utils/navigation'
+import { primaryNavLinks, type NavLink } from '~/utils/navigation'
 
 /**
  * "app"  → used with the sidebar layout; inline links are hidden and the
@@ -10,6 +10,9 @@ withDefaults(defineProps<{ variant?: 'app' | 'site' }>(), { variant: 'app' })
 
 const { user, isAuthenticated, logout } = useAuth()
 const route = useRoute()
+
+/** Signed-in-only links show a lock to signed-out visitors; following one leads to login. */
+const isLocked = (link: NavLink) => link.requiresAuth && !isAuthenticated.value
 
 const menuOpen = ref(false)
 const menuId = `mobile-menu-${useId()}`
@@ -37,7 +40,9 @@ watch(
           class="site-header__link"
           :aria-current="link.isActive(route.path) ? 'page' : undefined"
         >
+          <CommonAppIcon v-if="isLocked(link)" name="lock" :size="14" />
           {{ link.label }}
+          <span v-if="isLocked(link)" class="visually-hidden">(log in required)</span>
         </NuxtLink>
       </nav>
 
@@ -75,6 +80,10 @@ watch(
         >
           <CommonAppIcon :name="link.icon" :size="18" />
           {{ link.label }}
+          <span v-if="isLocked(link)" class="site-header__lock">
+            <CommonAppIcon name="lock" :size="14" />
+            <span class="visually-hidden">(log in required)</span>
+          </span>
         </NuxtLink>
       </div>
     </nav>
@@ -110,6 +119,9 @@ watch(
   margin-left: var(--space-4);
 }
 .site-header__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
@@ -185,6 +197,11 @@ watch(
 }
 .site-header__menu-link:hover {
   background: var(--bg-hover);
+}
+.site-header__lock {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--text-muted);
 }
 .site-header__menu-link[aria-current='page'] {
   background: var(--bg-sunken);

@@ -47,7 +47,7 @@ onMounted(fetchCards)
       </CommonAppAlert>
 
       <CommonLoadingState v-if="loading" variant="cards" label="Loading your catalog…" />
-      <CommonAppAlert v-else-if="errorMessage" title="Something went wrong">
+      <CommonAppAlert v-else-if="errorMessage" title="Your catalog didn't load">
         {{ errorMessage }}
       </CommonAppAlert>
       <CatalogGrid

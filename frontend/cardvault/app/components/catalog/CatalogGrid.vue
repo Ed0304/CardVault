@@ -10,8 +10,9 @@ withDefaults(
     showCreateAction?: boolean
   }>(),
   {
-    emptyTitle: 'No cards yet',
-    emptyDescription: 'Save your first piece of knowledge and it will be cataloged here.',
+    emptyTitle: 'Your library is empty',
+    emptyDescription:
+      'Add your first card: paste some text or a link to a web page you want to keep.',
     showCreateAction: true,
   },
 )
@@ -27,7 +28,7 @@ withDefaults(
   <CommonEmptyState v-else :title="emptyTitle" :description="emptyDescription" icon="catalog">
     <CommonAppButton v-if="showCreateAction" to="/catalog/create">
       <CommonAppIcon name="plus" :size="18" />
-      Create your first card
+      Add your first card
     </CommonAppButton>
   </CommonEmptyState>
 </template>
