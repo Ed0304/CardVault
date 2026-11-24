@@ -13,7 +13,7 @@
  * http://backend.railway.internal:8080 over a private network. Only the Express API is
  * proxied: the path always starts with /api, and the target is never taken from the request.
  */
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   const { apiProxyTarget } = useRuntimeConfig(event)
 
   // Local fallback only; production must configure the target explicitly.
@@ -26,5 +26,36 @@ export default defineEventHandler((event) => {
   }
 
   // event.path is the incoming path plus query, e.g. /api/auth/login?x=1
-  return proxyRequest(event, `${target}${event.path}`)
+  try {
+    return await proxyRequest(event, `${target}${event.path}`)
+  } catch (error) {
+    // A 502 here means the backend could not be reached at all. Log why, so the cause shows
+    // in the frontend service logs. Only the target address and the error code are logged:
+    // never cookies, headers or request bodies.
+    console.error(`[api-proxy] ${event.method} ${event.path} -> ${describeTarget(target)} failed: ${describeError(error)}`)
+    throw error
+  }
 })
+
+/** The configured target without credentials, e.g. "http://backend.railway.internal:8080". */
+function describeTarget(target: string): string {
+  try {
+    const url = new URL(target)
+    return `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ' (no port)'}`
+  } catch {
+    return `an invalid URL "${target}" (it must look like http://host:port)`
+  }
+}
+
+/** The innermost error code or message, e.g. "ECONNREFUSED" or "ENOTFOUND". */
+function describeError(error: unknown): string {
+  const parts: string[] = []
+  let current: unknown = error
+  for (let depth = 0; current && depth < 6; depth++) {
+    const e = current as { code?: unknown; message?: unknown; cause?: unknown }
+    if (typeof e.code === 'string') parts.push(e.code)
+    else if (typeof e.message === 'string' && e.message !== 'Bad Gateway') parts.push(e.message)
+    current = e.cause
+  }
+  return parts.length ? [...new Set(parts)].join(' <- ') : 'unknown error'
+}
