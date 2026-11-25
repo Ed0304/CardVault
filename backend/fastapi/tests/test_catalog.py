@@ -239,6 +239,14 @@ class TestSettings:
         with pytest.raises(ValidationError, match="https"):
             Settings(_env_file=None)
 
+    @pytest.mark.parametrize("raw", ["muse-spark-1.3 ", " muse-spark-1.3\n", '"muse-spark-1.3"', "'muse-spark-1.3'"])
+    def test_strips_whitespace_and_quotes_from_pasted_values(self, monkeypatch, raw):
+        monkeypatch.setenv("MUSE_CATALOG_MODEL", raw)
+        monkeypatch.setenv("MODEL_API_KEY", ' "test-model-api-key-not-real"\n')
+        settings = Settings(_env_file=None)
+        assert settings.catalog_model == "muse-spark-1.3"
+        assert settings.model_api_key.get_secret_value() == "test-model-api-key-not-real"
+
     def test_secrets_are_not_shown_in_repr(self):
         text = repr(Settings(_env_file=None))
         assert "test-model-api-key" not in text and TOKEN not in text

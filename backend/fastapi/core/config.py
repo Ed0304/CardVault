@@ -38,6 +38,17 @@ class Settings(BaseSettings):
     # Shared secret that Express sends as a bearer token (decision D-5).
     ai_service_token: SecretStr = Field(alias="AI_SERVICE_TOKEN")
 
+    @field_validator("model_api_key", "model_api_base_url", "catalog_model", "ai_service_token", mode="before")
+    @classmethod
+    def strip_pasted_value(cls, value: object) -> object:
+        # Values pasted into a hosting dashboard often carry a trailing space, a line break or
+        # surrounding quotes. Any of them makes the provider reject the model or the key.
+        if isinstance(value, str):
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1].strip()
+        return value
+
     @field_validator("catalog_model")
     @classmethod
     def reject_contributor_mode(cls, value: str) -> str:

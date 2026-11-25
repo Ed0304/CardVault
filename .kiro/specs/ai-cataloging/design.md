@@ -33,7 +33,7 @@ Sources: [Models](https://dev.meta.ai/docs/models), [Choose a model](https://dev
 | Task | Model | Why |
 |---|---|---|
 | Catalog generation (MVP) | **`muse-ember-1.0`**, reasoning effort `low` | Bounded extraction and classification over text the request supplies: the workload Meta names Ember for. Card text is at most 100,000 characters (about 25–35K tokens), well under Ember's 200K pricing cliff. About 12× cheaper than Spark per card. Default effort is `max`, which would waste tokens, so `low` is set explicitly |
-| Quality fallback | `muse-spark-1.3` | Same request body. Switch with `MUSE_CATALOG_MODEL` if subject headings are too weak in practice |
+| Quality fallback | `muse-spark-1.3` | Same request body. Switch with `MUSE_CATALOG_MODEL` if subject headings are too weak in practice. **The project owner chose `muse-spark-1.3` for the Railway deployment** (≈ $0.006–$0.02 per request) |
 | Not used | `muse-wonder-1.0` | Built for long-horizon agentic coding; ~40× Ember's price for no benefit on a short extraction task |
 | Not used | Muse Image, Muse Voice Transcribe, SAM | CardVault cards are text and URLs; PDF, OCR, audio and video are excluded from the MVP |
 
