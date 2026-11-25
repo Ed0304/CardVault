@@ -77,7 +77,8 @@ class ModelCatalogOutput(BaseModel):
 
     title: str = ""
     summary: str
-    facts: list[dict] = Field(default_factory=list)
+    # "Label | Value" / "Name | Relation" strings (the schema's format); objects are accepted too.
+    facts: list[str | dict] = Field(default_factory=list)
     subjects: list[str]
     keywords: list[str]
-    related: list[dict] = Field(default_factory=list)
+    related: list[str | dict] = Field(default_factory=list)

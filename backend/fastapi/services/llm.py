@@ -96,10 +96,11 @@ place, event or idea the document is about (for example "Marie Curie", "Photosyn
 - summary: 1 to 3 sentences, at most 60 words in total. State what the subject is, why it is \
 significant, and its one or two most defining characteristics. Leave out trivia, minor dates, \
 lists and plot detail.
-- facts: up to 8 key facts that the document states plainly, each {"label", "value"}. The label is \
-a short, general attribute name that suits this subject (for example "Type", "Born", "Author", \
-"First published", "First appearance", "Developer", "Location", "Field"). The value is a name, \
-date, number or phrase of at most 12 words. Do not repeat the summary.
+- facts: up to 8 key facts that the document states plainly, each written as one string \
+"Label | Value". The label is a short, general attribute name that suits this subject (for \
+example "Type", "Born", "Author", "First published", "First appearance", "Developer", "Location", \
+"Field"). The value is a name, date, number or phrase of at most 12 words. Example: \
+"Author | Jane Doe". Do not repeat the summary.
 - subjects: 2 to 5 library-style subject headings, most specific first. Each names the actual \
 topic, narrowed to this subject (for example "Impressionist painting" rather than "Art", "Gene \
 therapy" rather than "Medicine", "Nintendo video games" rather than "Video games"). Avoid broad \
@@ -107,21 +108,17 @@ categories such as "Science", "Technology", "History" or "Popular culture" on th
 existing heading fits precisely, reuse it exactly instead of inventing a near-synonym.
 - keywords: 3 to 12 specific search terms a reader might use: names, concepts, methods, places or \
 works central to the document. Do not repeat the title or the subject headings.
-- related: up to 8 concepts that the document explicitly connects to the subject, each \
-{"name", "relation"}. The name is written exactly as the document names it. The relation is a \
-short phrase of at most 5 words saying how it relates, based on what the document says (for \
+- related: up to 8 concepts that the document explicitly connects to the subject, each written as \
+one string "Name | Relation". The name is written exactly as the document names it. The relation \
+is a short phrase of at most 5 words saying how it relates, based on what the document says (for \
 example "Predecessor", "Successor", "Created by", "Part of", "Influenced", "Signature ability"). \
-Only include relationships the document states."""
+Example: "Pierre Curie | Collaborator". Only include relationships the document states."""
 
 # The schema the provider constrains decoding to. Counts and lengths are stated in the prompt and
-# enforced by normalise() below, so the schema stays within the documented strict subset (every
-# object has additionalProperties false and lists all its properties as required).
-_PAIR = lambda first, second: {  # noqa: E731
-    "type": "object",
-    "additionalProperties": False,
-    "required": [first, second],
-    "properties": {first: {"type": "string"}, second: {"type": "string"}},
-}
+# enforced by normalise() below. It is deliberately flat (strings and arrays of strings only, the
+# shape the provider accepted in production): after nested objects were added for facts and
+# related concepts, Meta Model API answered 404 model_not_found for every model. Pairs are written
+# as "Left | Right" strings and split by normalise().
 CATALOG_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -131,8 +128,8 @@ CATALOG_SCHEMA = {
         "summary": {"type": "string", "description": "1 to 3 original sentences, at most 60 words."},
         "facts": {
             "type": "array",
-            "items": _PAIR("label", "value"),
-            "description": "Up to 8 facts stated in the document; may be empty.",
+            "items": {"type": "string"},
+            "description": 'Up to 8 facts stated in the document, each "Label | Value"; may be empty.',
         },
         "subjects": {
             "type": "array",
@@ -146,8 +143,8 @@ CATALOG_SCHEMA = {
         },
         "related": {
             "type": "array",
-            "items": _PAIR("name", "relation"),
-            "description": "Up to 8 concepts the document connects to the subject; may be empty.",
+            "items": {"type": "string"},
+            "description": 'Up to 8 concepts the document connects to the subject, each "Name | Relation"; may be empty.',
         },
     },
 }
@@ -248,12 +245,23 @@ def _is_grounded(value: str, source_tokens: set[str]) -> bool:
     return not significant or any(w in source_tokens for w in significant)
 
 
-def _facts(raw: list[dict], source_tokens: set[str]) -> list[Fact]:
+def _pair(item: object, first: str, second: str, split_on_last: bool) -> tuple[str, str]:
+    """Reads one fact or related concept: a "Left | Right" string (the schema's format) or, from
+    older answers, an object with the two keys. Anything else gives empty values."""
+    if isinstance(item, dict):
+        return _clip(item.get(first)), _clip(item.get(second))
+    if isinstance(item, str) and "|" in item:
+        # Labels and relations are short, so a stray "|" belongs to the value or the name.
+        left, right = item.rsplit("|", 1) if split_on_last else item.split("|", 1)
+        return _clip(left), _clip(right)
+    return "", ""
+
+
+def _facts(raw: list, source_tokens: set[str]) -> list[Fact]:
     seen: set[str] = set()
     facts: list[Fact] = []
     for item in raw:
-        label = _clip(item.get("label"))
-        value = _clip(item.get("value"))
+        label, value = _pair(item, "label", "value", split_on_last=False)
         key = label.casefold()
         if not label or not value or len(label) > MAX_FACT_LABEL_CHARS or len(value) > MAX_FACT_VALUE_CHARS:
             continue
@@ -266,13 +274,12 @@ def _facts(raw: list[dict], source_tokens: set[str]) -> list[Fact]:
     return facts
 
 
-def _related(raw: list[dict], source_folded: str, title: str | None) -> list[RelatedConcept]:
+def _related(raw: list, source_folded: str, title: str | None) -> list[RelatedConcept]:
     """Keeps only concepts the source names, never the subject itself, each once."""
     seen: set[str] = {_fold(title)} if title else set()
     related: list[RelatedConcept] = []
     for item in raw:
-        name = _clip(item.get("name"))
-        relation = _clip(item.get("relation"))
+        name, relation = _pair(item, "name", "relation", split_on_last=True)
         key = _fold(name)
         if not name or not relation or len(name) > MAX_LABEL_CHARS or len(relation) > MAX_RELATION_CHARS:
             continue

@@ -139,16 +139,16 @@ plus `"title": "…" | null`, `"facts": [{ "label", "value" }]` and `"related": 
 
 ## Catalog Entry Structure (REQ-AI-017, REQ-AI-018)
 
-The model returns one JSON object (strict schema: every object has `additionalProperties: false` and all of its properties required; lists may be empty):
+The model returns one JSON object. The strict schema is deliberately **flat**: strings and arrays of strings only. A version with nested objects for facts and related concepts made Meta Model API answer `404 model_not_found` for every model in production, so pairs are written as `"Left | Right"` strings and split by FastAPI. FastAPI still returns them to Express as `{label, value}` and `{name, relation}` objects, and the object form is also accepted from the model. `scripts/check_models.py --shapes <model>` compares the request shapes against a live key.
 
 ```json
 {
   "title": "Name of the central subject",
   "summary": "1–3 original sentences, at most 60 words",
-  "facts":    [{ "label": "Author", "value": "Jane Doe" }],
+  "facts":    ["Author | Jane Doe"],
   "subjects": ["Most specific heading", "…"],
   "keywords": ["search term", "…"],
-  "related":  [{ "name": "Concept named in the source", "relation": "Successor" }]
+  "related":  ["Concept named in the source | Successor"]
 }
 ```
 

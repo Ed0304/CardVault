@@ -20,17 +20,11 @@ def entry(**overrides) -> str:
     value = {
         "title": "The Silent Orchard",
         "summary": "A Welsh novel about a botanist reconnecting with her drought-stricken family farm, praised for its restraint.",
-        "facts": [
-            {"label": "Type", "value": "Novel"},
-            {"label": "Author", "value": "Mara Ellis"},
-            {"label": "First published", "value": "1987"},
-        ],
+        # The schema's format: "Label | Value" and "Name | Relation" strings.
+        "facts": ["Type | Novel", "Author | Mara Ellis", "First published | 1987"],
         "subjects": ["Welsh fiction", "Rural life in literature"],
         "keywords": ["Mara Ellis", "Hawthorn Prize", "drought"],
-        "related": [
-            {"name": "Winter Roots", "relation": "Sequel"},
-            {"name": "Thomas Hardy", "relation": "Stylistic comparison"},
-        ],
+        "related": ["Winter Roots | Sequel", "Thomas Hardy | Stylistic comparison"],
     }
     value.update(overrides)
     return json.dumps(value)
@@ -182,14 +176,40 @@ def test_accepts_an_answer_in_the_older_shape(client):
     assert res.json()["title"] == "The Silent Orchard"
 
 
-def test_schema_stays_within_the_strict_subset():
-    def check(node):
-        if node.get("type") == "object":
-            assert node["additionalProperties"] is False
-            assert sorted(node["required"]) == sorted(node["properties"])
-            for child in node["properties"].values():
-                check(child)
-        if node.get("type") == "array":
-            check(node["items"])
+def test_schema_is_flat_and_within_the_strict_subset():
+    # Only the shape Meta Model API accepted in production: a root object of strings and arrays
+    # of strings. Nested objects made the provider answer model_not_found for every model.
+    assert CATALOG_SCHEMA["additionalProperties"] is False
+    assert sorted(CATALOG_SCHEMA["required"]) == sorted(CATALOG_SCHEMA["properties"])
+    for field in CATALOG_SCHEMA["properties"].values():
+        assert field["type"] in ("string", "array")
+        if field["type"] == "array":
+            assert field["items"] == {"type": "string"}
 
-    check(CATALOG_SCHEMA)
+
+class TestPairFormat:
+    def test_accepts_objects_from_older_answers(self, client):
+        res = catalog(
+            client,
+            entry(
+                facts=[{"label": "Author", "value": "Mara Ellis"}],
+                related=[{"name": "Winter Roots", "relation": "Sequel"}],
+            ),
+        )
+        assert res.json()["facts"] == [{"label": "Author", "value": "Mara Ellis"}]
+        assert res.json()["related"] == [{"name": "Winter Roots", "relation": "Sequel"}]
+
+    def test_splits_on_the_side_that_keeps_names_and_values_whole(self, client):
+        res = catalog(
+            client,
+            entry(
+                facts=["Award | Hawthorn Prize | 1988"],  # value keeps its own "|"
+                related=["Winter Roots | Sequel"],
+            ),
+        )
+        assert res.json()["facts"] == [{"label": "Award", "value": "Hawthorn Prize | 1988"}]
+
+    def test_drops_strings_without_a_separator_or_a_side(self, client):
+        res = catalog(client, entry(facts=["Author Mara Ellis", "| 1987", "Author |"], related=["Winter Roots", " | Sequel"]))
+        assert res.status_code == 200
+        assert res.json()["facts"] == [] and res.json()["related"] == []
