@@ -1,5 +1,5 @@
 import type { RecommendationPriority } from "../schemas/preferences.schemas.js";
-import { normalizeTopic, termsForInterest } from "./topicCatalog.js";
+import { normalizeTopic, significantWords, termsForInterest } from "./topicCatalog.js";
 
 /**
  * Ranks published cards for one user's "Recommended for today" (REQ-DISC-008 to REQ-DISC-011).
@@ -91,11 +91,47 @@ const PRIORITY_WEIGHTS: Record<RecommendationPriority, { interest: number; vault
   VAULT: { interest: 0.6, vault: 1.5 },
 };
 
-/** Whole-word match on normalized text, allowing a plural "s"/"es" on the last word. */
+/**
+ * A plural "s"/"es" is accepted only after a last word of at least this many letters. For
+ * shorter words the suffix usually makes a different word or a fixed expression rather than a
+ * plural ("art" → "Martial arts", "war" → "Star Wars", "new" → "News"), so they match exactly.
+ */
+export const MIN_PLURAL_STEM_LENGTH = 4;
+
+/** Whole-word match on normalized text, allowing a plural "s"/"es" on a long enough last word. */
 function containsTerm(text: string, term: string): boolean {
   if (!text || !term) return false;
   const padded = ` ${text} `;
-  return padded.includes(` ${term} `) || padded.includes(` ${term}s `) || padded.includes(` ${term}es `);
+  if (padded.includes(` ${term} `)) return true;
+  const lastWord = term.slice(term.lastIndexOf(" ") + 1);
+  if (lastWord.length < MIN_PLURAL_STEM_LENGTH) return false;
+  return padded.includes(` ${term}s `) || padded.includes(` ${term}es `);
+}
+
+/**
+ * Every word appears in the text as a whole word (plural "s"/"es" allowed), in any order:
+ * "history of the internet" contains ["internet", "history"]. Requiring all the significant
+ * words keeps a single shared word, such as "history", from matching on its own.
+ */
+function containsAllWords(text: string, words: string[]): boolean {
+  return words.length > 0 && words.every((word) => containsTerm(text, word));
+}
+
+/** An interest term, with the words that match it in any order (empty for one-word terms). */
+interface MatchTerm {
+  phrase: string;
+  words: string[];
+}
+
+/**
+ * Fields short enough for an any-order match to mean the same topic. In a description, the
+ * words could belong to different sentences, so descriptions need the exact phrase.
+ */
+const ANY_ORDER_FIELDS: ReadonlySet<Field> = new Set(["subjects", "keywords", "title", "related"]);
+
+function matchesTerm(text: string, term: MatchTerm, field: Field): boolean {
+  if (containsTerm(text, term.phrase)) return true;
+  return ANY_ORDER_FIELDS.has(field) && containsAllWords(text, term.words);
 }
 
 /** FNV-1a: a stable number per (seed, id), so ties and discovery picks change daily, not per render. */
@@ -144,12 +180,12 @@ function prepare(candidate: RankingCandidate): Prepared {
 }
 
 /** The best field weight at which any of the terms appears, or 0. */
-function matchWeight(prepared: Prepared, terms: string[]): number {
+function matchWeight(prepared: Prepared, terms: MatchTerm[]): number {
   let best = 0;
   for (const field of Object.keys(FIELD_WEIGHTS) as Field[]) {
     const weight = FIELD_WEIGHTS[field];
     if (weight <= best) continue;
-    if (prepared.fields[field].some((text) => terms.some((term) => containsTerm(text, term)))) best = weight;
+    if (prepared.fields[field].some((text) => terms.some((term) => matchesTerm(text, term, field)))) best = weight;
   }
   return best;
 }
@@ -181,8 +217,11 @@ export function rankRecommendations(
   if (limit <= 0 || candidates.length === 0) return [];
 
   const weights = PRIORITY_WEIGHTS[profile.priority];
-  const interests = profile.interests.map((label) => ({ label, terms: termsForInterest(label) }));
-  const interestKeys = new Set(interests.flatMap((i) => i.terms));
+  const interests = profile.interests.map((label) => ({
+    label,
+    terms: termsForInterest(label).map((phrase) => ({ phrase, words: significantWords(phrase) })),
+  }));
+  const interestKeys = new Set(interests.flatMap((i) => i.terms.map((t) => t.phrase)));
   const vault = profile.vault.map((card) => ({
     card,
     title: normalizeTopic(card.title),

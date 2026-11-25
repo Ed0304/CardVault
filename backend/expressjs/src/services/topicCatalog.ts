@@ -117,6 +117,25 @@ export function termsForInterest(label: string): string[] {
   return [...new Set(terms.filter(Boolean))];
 }
 
+/**
+ * Connecting words that carry no topic of their own. They are ignored when a multi-word term is
+ * matched regardless of word order, so "Internet history" and "History of the Internet" agree.
+ */
+const CONNECTING_WORDS = new Set([
+  "a", "an", "and", "as", "at", "by", "for", "from", "in", "into", "of", "on", "or", "the", "to", "vs", "with",
+]);
+
+/**
+ * The words of a normalized multi-word term that must all be present for a match in any order,
+ * without connecting words and repeats: "history of the internet" -> ["history", "internet"].
+ * Returns [] for single-word terms, which only match as whole words.
+ */
+export function significantWords(term: string): string[] {
+  const words = term.split(" ").filter(Boolean);
+  if (words.length < 2) return [];
+  return [...new Set(words.filter((word) => !CONNECTING_WORDS.has(word)))];
+}
+
 export function isStarterTopic(label: string): boolean {
   return STARTER_BY_LABEL.has(normalizeTopic(label));
 }

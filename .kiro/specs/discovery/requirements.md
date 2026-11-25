@@ -76,6 +76,7 @@ recommendations are built from).
 ### REQ-DISC-011: Relevance and Discovery
 - Signals: chosen interests (matched against subject headings, keywords, titles, related concepts and descriptions), the user's own vault (related concepts that name a card, and shared headings and keywords), and discovery (topics next to the user's interests, and topics outside them).
 - A heading carried by most cards does not by itself make a card "related to your vault" or "close to your interest".
+- Word order in a multi-word interest does not matter for headings, keywords, titles and related concepts ("Internet history" matches "History of the Internet"). Every significant word must be present, so one shared word such as "history" is not a match.
 - At least one of the six cards is discovery when such cards exist; two with "Surprise me". A user with only "Surprise me" and an empty vault gets a variety of topics.
 - Picks are spread across topics before one topic repeats.
 - The picks are stable for a user for a day (and change when preferences change), without storing them.

@@ -50,7 +50,13 @@ A label is what the user sees and what card metadata contains. The starter list 
 ### D-DISC-4: Metadata ranking now, embeddings later
 No embeddings exist (`ai_embedding_status` is `NOT_AVAILABLE`, no pgvector column), and calling Muse per dashboard render would be slow and costly. The ranking uses the subject headings, keywords, titles, related concepts and descriptions that cataloging already produced.
 
-`rankRecommendations` is a pure function: candidates and a profile in, picks with reasons out. Matching is whole-word on normalized text (lowercase, accents removed, punctuation as spaces; a trailing "s"/"es" allowed), so "art" does not match "Smartphones".
+`rankRecommendations` is a pure function: candidates and a profile in, picks with reasons out.
+
+Matching is whole-word on normalized text: lowercase, accents removed, punctuation as spaces. So "art" does not match "Smartphones".
+
+A trailing "s"/"es" on the card's word is accepted only when the term's last word has at least 4 letters (`MIN_PLURAL_STEM_LENGTH`). Below that, the suffix usually makes a different word or a fixed expression rather than a plural ("art" → "Martial arts", "war" → "Star Wars", "new" → "News"), so short words match only as written. The accepted cost is that "art" no longer matches "Arts" (TASK-DISC-025).
+
+A multi-word interest term also matches when all of its significant words (not "of", "the", "and" and similar connecting words) appear in one subject heading, keyword, title or related concept, in any order. "Internet history" matches "History of the Internet", but "History of art" does not, because "art" is missing. Descriptions need the exact phrase, since scattered words there are weak evidence (TASK-DISC-024).
 
 Scoring:
 - Interest: best field weight among subjects 3, keywords 2, title 2, related concepts 1.5, description 1.
@@ -84,7 +90,7 @@ CardVault has no content classification. Recommendations use the same visibility
 
 | Area | File |
 |---|---|
-| Ranking rules (17 tests, no database) | `tests/recommendationRanking.test.ts` |
+| Ranking rules (28 tests, no database) | `tests/recommendationRanking.test.ts` |
 | Guest access, onboarding, preferences, recommendations (21 tests) | `tests/discovery.integration.test.ts` |
 | Guest detail replaces the old "401 for guests" test | `tests/community.integration.test.ts` |
 | Auth mock gains `onboardingCompleted` | `tests/auth.test.ts` |
