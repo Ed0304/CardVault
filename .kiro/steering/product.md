@@ -92,8 +92,8 @@ Implementation status note: nothing in the AI work is implemented yet. The inten
 
 Explicitly excluded from MVP:
 - Collaboration: shared ownership, collaborative editing, live-linked copies.
-- Public access without an account (the Community Catalog requires sign-in).
-- Social features: likes, comments, followers, reputation, recommendation feeds.
+- Writing without an account. Guests may read the Community Catalog (discovery spec); creating, saving, editing and publishing need sign-in.
+- Social features: likes, comments, followers, reputation, activity feeds, or recommendations based on other users' behaviour. (Personal recommendations on Home are in scope; see the discovery spec.)
 - Browser extensions.
 - Native desktop or mobile applications.
 - Offline-first functionality.

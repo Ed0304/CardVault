@@ -165,6 +165,92 @@ describe("rankRecommendations", () => {
     expect(vaultFirst[0]?.id).toBe("vlt");
   });
 
+  describe("catalog relationships and heading specificity", () => {
+    const vaultCard = (fields: Partial<RankingProfile["vault"][number]>) => ({
+      id: "mine",
+      title: "Dark matter",
+      subjects: [],
+      keywords: [],
+      ...fields,
+    });
+
+    it("recommends a card that a vault card lists as a related concept", () => {
+      const result = rankRecommendations(
+        [card("lens", { title: "Gravitational lensing", subjects: ["Astrophysics"] }), card("other", { subjects: ["Pottery"] })],
+        profile({ interests: ["Knitting"], vault: [vaultCard({ related: ["Gravitational lensing"] })] }),
+        { seed },
+      );
+      expect(result[0]).toEqual({
+        id: "lens",
+        reason: {
+          kind: "VAULT",
+          text: "“Dark matter” in your vault lists this as a related concept.",
+          topics: [],
+          vaultCard: { id: "mine", title: "Dark matter" },
+        },
+      });
+    });
+
+    it("recommends a card that lists a vault card as a related concept", () => {
+      const result = rankRecommendations(
+        [card("rot", { title: "Galaxy rotation curves", related: ["Dark Matter"] }), card("other", { subjects: ["Pottery"] })],
+        profile({ interests: ["Knitting"], vault: [vaultCard({})] }),
+        { seed },
+      );
+      expect(result[0]?.id).toBe("rot");
+      expect(result[0]?.reason.text).toBe("Lists “Dark matter”, a card in your vault, as a related concept.");
+    });
+
+    it("ranks an explicit related-concept link above a single shared heading", () => {
+      const result = rankRecommendations(
+        [
+          card("shared", { subjects: ["Cosmology"] }),
+          card("linked", { title: "Gravitational lensing", subjects: ["Optics"] }),
+        ],
+        profile({
+          interests: ["Knitting"],
+          vault: [vaultCard({ subjects: ["Cosmology"], related: ["Gravitational lensing"] })],
+        }),
+        { seed },
+      );
+      expect(result.map((r) => r.id).slice(0, 2)).toEqual(["linked", "shared"]);
+      expect(result[1]?.reason.text).toBe("Shares “Cosmology” with “Dark matter” in your vault.");
+    });
+
+    it("does not link to the vault through a heading that most cards carry", () => {
+      const candidates = Array.from({ length: 20 }, (_, i) => card(`s${i}`, { subjects: ["Science", `Topic ${i}`] }));
+      const result = rankRecommendations(
+        candidates,
+        profile({ interests: ["Knitting"], vault: [vaultCard({ subjects: ["Science"] })] }),
+        { seed },
+      );
+      expect(result.filter((r) => r.reason.kind === "VAULT")).toEqual([]);
+    });
+
+    it("finds nearby topics through specific headings, not broad ones", () => {
+      const fillers = Array.from({ length: 10 }, (_, i) => card(`f${i}`, { subjects: ["Science", `Filler ${i}`] }));
+      const result = rankRecommendations(
+        [
+          card("match", { subjects: ["Astronomy", "Science", "Navigation"] }),
+          card("nav", { subjects: ["Navigation", "Clocks"] }),
+          card("broad", { subjects: ["Science", "Pottery"] }),
+          ...fillers,
+        ],
+        profile({ interests: ["Astronomy"] }),
+        { seed },
+      );
+      expect(result.find((r) => r.id === "nav")?.reason).toEqual({
+        kind: "ADJACENT",
+        text: "Close to your interest in Astronomy: both touch on Navigation.",
+        topics: ["Astronomy", "Navigation"],
+      });
+      for (const r of result.filter((x) => x.reason.kind === "ADJACENT")) {
+        expect(r.reason.topics).not.toContain("Science");
+      }
+      expect(result.find((r) => r.id === "broad")?.reason.kind ?? "EXPLORE").toBe("EXPLORE");
+    });
+  });
+
   it("never returns more than the limit or a card twice", () => {
     const candidates = Array.from({ length: 12 }, (_, i) => card(`d${i}`, { subjects: ["Science"] }));
     const result = rankRecommendations(candidates, profile({ interests: ["Science"], surpriseMe: true }), { seed, limit: 4 });

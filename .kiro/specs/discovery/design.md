@@ -55,9 +55,10 @@ No embeddings exist (`ai_embedding_status` is `NOT_AVAILABLE`, no pgvector colum
 Scoring:
 - Interest: best field weight among subjects 3, keywords 2, title 2, related concepts 1.5, description 1.
 - Bridge: two interests matched; the sum of both plus 1.
-- Vault: a shared subject heading counts 2, a shared keyword 1, with at least 2 needed; capped at 6.
+- Vault: a related-concept link counts 4. This means a vault card lists the candidate's title as a related concept, or the candidate lists the vault card's title; titles are compared after normalization. Shared headings add 2 × specificity per subject and 1 × specificity per keyword. Without a related link, the heading score must reach 1.5. The total is capped at 6.
+- Specificity of a heading = ln(1 + N/df) / ln(1 + N) over the N candidates, where df is how many candidates carry it. It is 1 for a heading on one card and falls towards 0 for headings most cards carry, so broad headings ("Science") cannot link cards on their own (TASK-DISC-023).
 - Priority multiplies the interest and vault scores: BALANCED 1/1, INTERESTS 1.5/0.5, VAULT 0.6/1.5.
-- Adjacent: a card that matches no interest but shares a heading with an interest-matched card.
+- Adjacent: a card that matches no interest but shares a heading of specificity ≥ 0.5 (roughly: on at most a tenth of the candidates) with an interest-matched card. The most specific shared heading is named in the reason and orders the adjacent cards.
 - Explore: everything else.
 
 Selection, six cards:
@@ -71,7 +72,7 @@ Ties and the explore order use an FNV-1a hash of `userId:date:preferencesUpdated
 The candidate pool is the 500 most recently published eligible cards. Past that size, move scoring into SQL (a GIN index on `ai_subjects`) or add a pgvector similarity signal to the same function.
 
 ### D-DISC-5: Eligibility in SQL, before ranking
-The candidate query selects only `PUBLIC_COLUMNS` of `visibility = 'PUBLIC'` cards with `user_id <> viewer` and no saved copy by the viewer. The viewer's own vault (up to 200 cards with headings) is read separately and used only in the viewer's own response, for the "Shares … with your card" reason.
+The candidate query selects only `PUBLIC_COLUMNS` of `visibility = 'PUBLIC'` cards with `user_id <> viewer` and no saved copy by the viewer. The viewer's own vault (up to 200 cards with headings, keywords or related concepts) is read separately. Its titles, headings, keywords and related-concept names are used only in the viewer's own response, for the "Shares … with your card" and "… lists this as a related concept" reasons. Notes are never read.
 
 ### D-DISC-6: Onboarding gate in the route guard
 `auth.global.ts` sends signed-in, not-onboarded users from any signed-in page to `/welcome?redirect=<page>`. Public pages are not gated, so the "register to save this card" path is not interrupted. `/welcome` (meta `onboarding: true`) sends onboarded users on. `safeRedirectPath` refuses `/welcome` as a target to avoid loops. The default signed-in landing changed from `/catalog` to `/home`. If `/api/recommendations` answers 409 `ONBOARDING_REQUIRED`, the client marks the session as not onboarded and opens onboarding.
@@ -83,8 +84,8 @@ CardVault has no content classification. Recommendations use the same visibility
 
 | Area | File |
 |---|---|
-| Ranking rules (12 tests, no database) | `tests/recommendationRanking.test.ts` |
-| Guest access, onboarding, preferences, recommendations (20 tests) | `tests/discovery.integration.test.ts` |
+| Ranking rules (17 tests, no database) | `tests/recommendationRanking.test.ts` |
+| Guest access, onboarding, preferences, recommendations (21 tests) | `tests/discovery.integration.test.ts` |
 | Guest detail replaces the old "401 for guests" test | `tests/community.integration.test.ts` |
 | Auth mock gains `onboardingCompleted` | `tests/auth.test.ts` |
 

@@ -23,6 +23,15 @@
 - [x] **TASK-DISC-016** `pages/settings.vue` — edit interests, Surprise me and priority.
 - [x] **TASK-DISC-017** Verified with `vue-tsc` (via npx), the production build, and an HTTP walk-through of the route guard (Express on `cardvault_test` plus `nuxi dev`): 22 checks passed for guest pages, login redirects, onboarding gate, saving before onboarding, Home, Settings and recommendations. Not yet checked in a browser.
 
+## Recommendation Quality
+
+- [x] **TASK-DISC-023** Relationship-aware, specificity-weighted links in `rankRecommendations`:
+  - Related concepts on vault cards (and on candidates) link cards, with two new VAULT reason texts.
+  - Heading links are weighted by specificity, so broad headings no longer create VAULT or ADJACENT links.
+  - The vault query reads `ai_related`.
+  - The API shape and reason kinds are unchanged.
+  - Verified by 5 new unit tests and 1 new integration test; the full Express suite passed 294/294 against `cardvault_test` on 2026-11-25.
+
 ## Later
 
 - [ ] **TASK-DISC-020** Browser check of onboarding, Home and Settings on desktop and mobile widths.

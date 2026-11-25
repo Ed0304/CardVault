@@ -68,12 +68,14 @@ recommendations are built from).
   - "Based on your interest in <topic>."
   - "Connects two topics you follow: <topic> and <topic>."
   - "Shares “<heading>” with “<your card>” in your vault."
+  - "“<your card>” in your vault lists this as a related concept." / "Lists “<your card>”, a card in your vault, as a related concept."
   - "Close to your interest in <topic>: both touch on <heading>."
   - "Explore something new: <heading>."
 - Generic reasons such as "Recommended by AI" are not used.
 
 ### REQ-DISC-011: Relevance and Discovery
-- Signals: chosen interests (matched against subject headings, keywords, titles, related concepts and descriptions), the user's own vault (shared headings and keywords), and discovery (topics next to the user's interests, and topics outside them).
+- Signals: chosen interests (matched against subject headings, keywords, titles, related concepts and descriptions), the user's own vault (related concepts that name a card, and shared headings and keywords), and discovery (topics next to the user's interests, and topics outside them).
+- A heading carried by most cards does not by itself make a card "related to your vault" or "close to your interest".
 - At least one of the six cards is discovery when such cards exist; two with "Surprise me". A user with only "Surprise me" and an empty vault gets a variety of topics.
 - Picks are spread across topics before one topic repeats.
 - The picks are stable for a user for a day (and change when preferences change), without storing them.

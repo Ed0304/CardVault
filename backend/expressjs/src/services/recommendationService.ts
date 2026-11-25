@@ -20,8 +20,8 @@ import {
  *
  * Eligibility is enforced in SQL before ranking: only PUBLIC cards, never the viewer's own, and
  * not ones the viewer already saved. Only public columns of those cards are selected. The
- * viewer's own vault (their cards, private or not) is read to find related cards, and is used
- * only in this viewer's response.
+ * viewer's own vault (their cards, private or not: titles, headings, keywords and related-concept
+ * names) is read to find related cards, and is used only in this viewer's response.
  *
  * No AI model is called here: ranking uses the catalog metadata Muse already produced. The
  * candidate pool is the most recently published cards, which bounds the work per request.
@@ -54,6 +54,7 @@ interface VaultRow {
   title: string | null;
   ai_subjects: string[];
   ai_keywords: string[];
+  ai_related: RelatedConcept[];
 }
 
 export function onboardingRequired(): AppError {
@@ -81,10 +82,11 @@ export async function getRecommendations(
     ),
     pool.query<VaultRow>(
       `SELECT id, COALESCE(catalog_title, NULLIF(btrim(source_title), '')) AS title,
-              ai_subjects, ai_keywords
+              ai_subjects, ai_keywords, ai_related
          FROM knowledge_cards
         WHERE user_id = $1
-          AND (cardinality(ai_subjects) > 0 OR cardinality(ai_keywords) > 0)
+          AND (cardinality(ai_subjects) > 0 OR cardinality(ai_keywords) > 0
+               OR jsonb_array_length(ai_related) > 0)
         ORDER BY updated_at DESC
         LIMIT $2`,
       [userId, VAULT_SAMPLE],
@@ -97,6 +99,7 @@ export async function getRecommendations(
     title: row.title ?? "an untitled card",
     subjects: row.ai_subjects,
     keywords: row.ai_keywords,
+    related: (row.ai_related ?? []).map((concept) => concept.name),
   }));
 
   const date = now.toISOString().slice(0, 10);

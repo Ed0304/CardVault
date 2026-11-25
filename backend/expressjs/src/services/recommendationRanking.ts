@@ -12,10 +12,14 @@ import { normalizeTopic, termsForInterest } from "./topicCatalog.js";
  * Signals:
  * - INTEREST  the card matches a topic the user chose.
  * - BRIDGE    the card matches two of the user's topics at once.
- * - VAULT     the card shares subject headings or keywords with a card in the user's own vault.
- * - ADJACENT  the card matches none of the user's topics but shares a heading with a card that
- *             does, e.g. folklore next to Pokémon. Discovery near the user's interests.
+ * - VAULT     the card and a card in the user's own vault name each other as related concepts,
+ *             or share specific subject headings or keywords.
+ * - ADJACENT  the card matches none of the user's topics but shares a specific heading with a
+ *             card that does, e.g. folklore next to Pokémon. Discovery near the user's interests.
  * - EXPLORE   a card from a subject the user has not chosen. Discovery further away.
+ *
+ * Heading links are weighted by how specific the heading is among the candidates, so broad
+ * headings that most cards carry do not create links on their own.
  *
  * Every pick carries a reason naming the topic, heading or vault card behind it.
  */
@@ -46,6 +50,8 @@ export interface RankingVaultCard {
   title: string;
   subjects: string[];
   keywords: string[];
+  /** Names of the card's related concepts, as the owner saved them. */
+  related?: string[];
 }
 
 export interface RankingProfile {
@@ -65,6 +71,19 @@ export const DEFAULT_RECOMMENDATION_COUNT = 6;
 // Where a match is found says how central the topic is to the card.
 const FIELD_WEIGHTS = { subjects: 3, keywords: 2, title: 2, related: 1.5, summary: 1 } as const;
 type Field = keyof typeof FIELD_WEIGHTS;
+
+/**
+ * Heading links are weighted by specificity: a heading on almost every card ("Science") says
+ * little about two cards being related; one on few cards ("Typography") says a lot.
+ * specificity = ln(1 + N/df) / ln(1 + N), where N is the number of candidates and df the number
+ * of candidates with the heading: 1 for a heading on one card, falling towards 0 as df nears N.
+ */
+const VAULT_MIN_SCORE = 1.5;
+/** A "Nearby topic" link needs a heading on at most about a tenth of the candidates. */
+const ADJACENT_MIN_SPECIFICITY = 0.5;
+/** A related concept saved on a vault card that names this card, or the reverse. */
+const RELATED_LINK_SCORE = 4;
+const VAULT_SCORE_CAP = 6;
 
 const PRIORITY_WEIGHTS: Record<RecommendationPriority, { interest: number; vault: number }> = {
   BALANCED: { interest: 1, vault: 1 },
@@ -166,16 +185,26 @@ export function rankRecommendations(
   const interestKeys = new Set(interests.flatMap((i) => i.terms));
   const vault = profile.vault.map((card) => ({
     card,
+    title: normalizeTopic(card.title),
     subjects: new Set(card.subjects.map(normalizeTopic).filter(Boolean)),
     keywords: new Set(card.keywords.map(normalizeTopic).filter(Boolean)),
+    related: new Set((card.related ?? []).map(normalizeTopic).filter(Boolean)),
   }));
   const tiebreak = (id: string) => hash(`${options.seed}:${id}`);
   const prepared = candidates.map(prepare);
 
+  const documentFrequency = new Map<string, number>();
+  for (const p of prepared) {
+    for (const heading of p.headings) documentFrequency.set(heading, (documentFrequency.get(heading) ?? 0) + 1);
+  }
+  const n = prepared.length;
+  const specificity = (heading: string) =>
+    Math.log(1 + n / Math.max(1, documentFrequency.get(heading) ?? 1)) / Math.log(1 + n);
+
   // Pass 1: interest, bridge and vault signals.
   const relevant: Scored[] = [];
   const rest: Prepared[] = [];
-  // Headings of interest-matched cards, so neighbouring cards can be found in pass 2.
+  // Specific headings of interest-matched cards, so neighbouring cards can be found in pass 2.
   const nearInterest = new Map<string, string>();
 
   for (const p of prepared) {
@@ -212,45 +241,65 @@ export function rankRecommendations(
     }
     for (const m of matched) {
       for (const heading of p.headings) {
-        if (!interestKeys.has(heading) && !nearInterest.has(heading)) nearInterest.set(heading, m.interest.label);
+        if (interestKeys.has(heading) || nearInterest.has(heading)) continue;
+        if (specificity(heading) >= ADJACENT_MIN_SPECIFICITY) nearInterest.set(heading, m.interest.label);
       }
     }
 
-    // Vault: a shared subject heading counts 2, a shared keyword 1; at least 2 is a real link.
-    let vaultBest: { score: number; card: RankingVaultCard; shared: string } | null = null;
+    // Vault: an explicit related-concept link between this card and a vault card is the strongest
+    // signal. Shared headings add 2 × specificity per subject and 1 × specificity per keyword;
+    // without a related link they must reach VAULT_MIN_SCORE to count.
+    const candidateTitle = p.fields.title[0] ?? "";
+    let vaultBest: {
+      score: number;
+      card: RankingVaultCard;
+      related: "VAULT_LISTS_CARD" | "CARD_LISTS_VAULT" | null;
+      shared: string | null;
+    } | null = null;
     for (const v of vault) {
-      let score = 0;
+      const related =
+        candidateTitle && v.related.has(candidateTitle)
+          ? "VAULT_LISTS_CARD"
+          : v.title && p.fields.related.includes(v.title)
+            ? "CARD_LISTS_VAULT"
+            : null;
+      let headingScore = 0;
       let shared: string | null = null;
-      for (const s of p.fields.subjects) {
-        if (s && v.subjects.has(s)) {
-          score += 2;
-          shared ??= s;
+      let sharedWeight = 0;
+      const add = (heading: string, base: number) => {
+        const weight = base * specificity(heading);
+        headingScore += weight;
+        if (weight > sharedWeight) {
+          sharedWeight = weight;
+          shared = heading;
         }
-      }
-      for (const k of p.fields.keywords) {
-        if (k && (v.keywords.has(k) || v.subjects.has(k))) {
-          score += 1;
-          shared ??= k;
-        }
-      }
-      if (score >= 2 && shared && (!vaultBest || score > vaultBest.score)) {
-        vaultBest = { score, card: v.card, shared };
-      }
+      };
+      for (const s of p.fields.subjects) if (s && v.subjects.has(s)) add(s, 2);
+      for (const k of p.fields.keywords) if (k && (v.keywords.has(k) || v.subjects.has(k))) add(k, 1);
+      if (!related && headingScore < VAULT_MIN_SCORE) continue;
+      const score = Math.min((related ? RELATED_LINK_SCORE : 0) + headingScore, VAULT_SCORE_CAP);
+      if (!vaultBest || score > vaultBest.score) vaultBest = { score, card: v.card, related, shared };
     }
     if (vaultBest) {
-      const vaultScore = Math.min(vaultBest.score, 6) * weights.vault;
+      const vaultScore = vaultBest.score * weights.vault;
       if (!best || vaultScore > best.score) {
-        const heading = p.display.get(vaultBest.shared) ?? vaultBest.shared;
+        const { card, related, shared } = vaultBest;
+        const vaultCard = { id: card.id, title: card.title };
+        let reason: RecommendationReason;
+        if (related === "VAULT_LISTS_CARD") {
+          reason = { kind: "VAULT", text: `“${card.title}” in your vault lists this as a related concept.`, topics: [], vaultCard };
+        } else if (related === "CARD_LISTS_VAULT") {
+          reason = { kind: "VAULT", text: `Lists “${card.title}”, a card in your vault, as a related concept.`, topics: [], vaultCard };
+        } else {
+          const heading = p.display.get(shared!) ?? shared!;
+          reason = { kind: "VAULT", text: `Shares “${heading}” with “${card.title}” in your vault.`, topics: [heading], vaultCard };
+        }
         best = {
           prepared: p,
           score: vaultScore,
-          topicKey: vaultBest.shared,
-          reason: {
-            kind: "VAULT",
-            text: `Shares “${heading}” with “${vaultBest.card.title}” in your vault.`,
-            topics: [heading],
-            vaultCard: { id: vaultBest.card.id, title: vaultBest.card.title },
-          },
+          // Related links spread by vault card; heading links by the shared heading.
+          topicKey: related ? `vault:${card.id}` : shared!,
+          reason,
         };
       }
     }
@@ -263,13 +312,16 @@ export function rankRecommendations(
   const adjacent: Scored[] = [];
   const explore: Scored[] = [];
   for (const p of rest) {
-    const link = [...p.headings].find((h) => nearInterest.has(h));
+    // The most specific heading shared with an interest-matched card.
+    const link = [...p.headings]
+      .filter((h) => nearInterest.has(h))
+      .sort((a, b) => specificity(b) - specificity(a) || a.localeCompare(b))[0];
     if (link) {
       const interest = nearInterest.get(link)!;
       const heading = p.display.get(link) ?? link;
       adjacent.push({
         prepared: p,
-        score: 1,
+        score: specificity(link),
         topicKey: link,
         reason: {
           kind: "ADJACENT",

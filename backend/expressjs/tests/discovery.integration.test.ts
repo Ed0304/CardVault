@@ -264,6 +264,25 @@ describeIntegration("Guest discovery, onboarding and recommendations (real datab
       expect(pick?.reason.text).toBe(`Shares “${VAULT_TOPIC}” with “Bob vault ${RUN}” in your vault.`);
     });
 
+    it("recommends a card that one of the user's vault cards lists as a related concept", async () => {
+      const target = await newCard(alice, { title: `Related target ${RUN}`, subjects: [`rel${RUN}`], publish: true });
+      const note = await newCard(bob, { title: `Bob reading list ${RUN}` });
+      const edited = await as(bob).patch(`/api/cards/${note}/ai-metadata`, {
+        aiRelated: [{ name: `Related target ${RUN}`, relation: "Read next" }],
+      });
+      expect(edited.status).toBe(200);
+
+      const pick = (await recommendations(bob)).find((item) => item.card.id === target);
+      expect(pick?.reason).toMatchObject({
+        kind: "VAULT",
+        text: `“Bob reading list ${RUN}” in your vault lists this as a related concept.`,
+        vaultCard: { id: note, title: `Bob reading list ${RUN}` },
+      });
+      // The link comes from Bob's own card: nobody else sees it.
+      const carolRaw = JSON.stringify(await recommendations(carol));
+      expect(carolRaw).not.toContain(`Bob reading list ${RUN}`);
+    });
+
     it("never recommends private cards, the user's own cards, or cards already saved", async () => {
       const ids = (await recommendations(bob)).map((item) => item.card.id);
       expect(ids).not.toContain(privateId);
