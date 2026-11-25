@@ -216,12 +216,14 @@ class MuseCatalogClient:
             # failures, the underlying exception class. Never the message, which may echo input.
             cause = error.__cause__
             logger.warning(
-                "catalog request failed model=%s error=%s status=%s provider_type=%s provider_code=%s cause=%s duration_ms=%d",
+                "catalog request failed model=%s error=%s status=%s provider_type=%s provider_code=%s provider_param=%s cause=%s duration_ms=%d",
                 settings.catalog_model,
                 type(error).__name__,
                 getattr(error, "status_code", None),
                 getattr(error, "type", None),
                 getattr(error, "code", None),
+                # For a 400: which request parameter the provider rejected (a name, never input).
+                getattr(error, "param", None),
                 type(cause).__name__ if cause else None,
                 (time.monotonic() - started) * 1000,
             )
