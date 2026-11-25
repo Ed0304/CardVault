@@ -66,6 +66,8 @@ export interface IngestedPage {
     fetchedAt: string;
     /** True when the text was cut to the card limit. */
     truncated: boolean;
+    /** Set when the text came from the site's official API instead of the page itself. */
+    retrievedVia?: string;
   };
 }
 
@@ -237,7 +239,10 @@ function readLimited(res: http.IncomingMessage, maxBytes: number): Promise<Buffe
   });
 }
 
-function fetchOnce(url: URL, signal: AbortSignal): Promise<Hop> {
+/** What a request expects back: a web page, or JSON from a site's own API. */
+type Expect = "html" | "json";
+
+function fetchOnce(url: URL, signal: AbortSignal, expect: Expect = "html"): Promise<Hop> {
   const host = url.hostname.replace(/^\[|\]$/g, "");
   if (net.isIP(host) && !ingestionPolicy.isAllowedAddress(host)) return Promise.reject(ssrfBlocked());
 
@@ -256,7 +261,7 @@ function fetchOnce(url: URL, signal: AbortSignal): Promise<Hop> {
         signal,
         headers: {
           "user-agent": USER_AGENT,
-          accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1",
+          accept: expect === "json" ? "application/json" : "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1",
           "accept-encoding": "gzip, deflate, br",
           "accept-language": "en;q=0.9, *;q=0.5",
         },
@@ -272,7 +277,8 @@ function fetchOnce(url: URL, signal: AbortSignal): Promise<Hop> {
           return reject(refusal(status, res.headers));
         }
         const contentType = res.headers["content-type"] ?? "";
-        if (!HTML_TYPES.has(mediaType(contentType))) {
+        const accepted = expect === "json" ? mediaType(contentType) === "application/json" : HTML_TYPES.has(mediaType(contentType));
+        if (!accepted) {
           res.destroy();
           return reject(
             new AppError(422, "UNSUPPORTED_CONTENT_TYPE", "Only HTML web pages can be saved. This address is a file or another kind of content."),
@@ -320,33 +326,108 @@ function describeNetworkError(err: unknown): string {
   return typeof code === "string" ? code : err instanceof Error ? err.name : "unknown";
 }
 
+/** Fetches a URL, following at most `maxRedirects` validated redirects. */
+async function fetchFollowing(start: URL, signal: AbortSignal, expect: Expect) {
+  let current = start;
+  for (let redirects = 0; ; redirects += 1) {
+    const hop = await fetchOnce(current, signal, expect);
+    if (hop.kind === "page") return { page: hop, finalUrl: current };
+    if (redirects === config.urlIngestion.maxRedirects) {
+      throw new AppError(422, "TOO_MANY_REDIRECTS", "The page redirected too many times.");
+    }
+    current = validateUrl(new URL(hop.location, current).href, 422);
+  }
+}
+
+/** The article title in a MediaWiki address (/wiki/Title or index.php?title=Title), or null. */
+export function mediaWikiTitle(url: URL): string | null {
+  try {
+    const path = /^\/wiki\/(.+)$/.exec(url.pathname);
+    const raw = path ? decodeURIComponent(path[1]!) : /\/index\.php$/.test(url.pathname) ? url.searchParams.get("title") : null;
+    const title = raw?.replace(/_/g, " ").trim();
+    return title && title.length <= 255 ? title : null;
+  } catch {
+    return null;
+  }
+}
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+/**
+ * For a MediaWiki article whose page was refused by bot protection, asks the same site's official
+ * API (api.php, action=parse) for that one article. This is the interface MediaWiki provides for
+ * programs, which sites commonly leave open while challenging browser-style page loads; using it,
+ * under CardVault's own User-Agent, is the supported route, not a way around the protection.
+ * The request goes through the same address checks, redirect rules, deadline and size limits.
+ * Returns null when the site has no usable API, so the original "blocked" message stands.
+ */
+export async function fetchMediaWikiArticle(article: URL, title: string, signal: AbortSignal): Promise<string | null> {
+  for (const path of ["/w/api.php", "/api.php"]) {
+    const api = new URL(path, article.origin);
+    api.search = new URLSearchParams({
+      action: "parse",
+      page: title,
+      prop: "text",
+      redirects: "1",
+      disableeditsection: "1",
+      disabletoc: "1",
+      format: "json",
+      formatversion: "2",
+    }).toString();
+
+    let body: { parse?: { title?: unknown; text?: unknown }; error?: { code?: unknown } };
+    try {
+      const { page } = await fetchFollowing(api, signal, "json");
+      body = JSON.parse(decodeHtml(page.body, page.contentType));
+    } catch (err) {
+      // No API at this path (404, HTML, blocked too); try the next one. Timeouts end the attempt.
+      if (signal.aborted) throw err;
+      continue;
+    }
+    if (body.error?.code === "missingtitle") {
+      throw new AppError(422, "FETCH_FAILED", "That page wasn't found. Check the address and try again.");
+    }
+    const html = body.parse?.text;
+    if (typeof html !== "string" || !html) continue;
+    const name = typeof body.parse?.title === "string" ? body.parse.title : title;
+    console.warn("[url-ingest] page refused; article read through the site's MediaWiki API");
+    return (
+      `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(name)}</title>` +
+      `<link rel="canonical" href="${escapeHtml(article.href)}"></head>` +
+      `<body><article><h1>${escapeHtml(name)}</h1>${html}</article></body></html>`
+    );
+  }
+  return null;
+}
+
 export async function ingestUrl(rawUrl: string): Promise<IngestedPage> {
   const submitted = validateUrl(rawUrl.trim(), 400);
-  const { timeoutMs, maxRedirects } = config.urlIngestion;
+  const { timeoutMs } = config.urlIngestion;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    let current = submitted;
-    let page: Extract<Hop, { kind: "page" }> | undefined;
-    for (let redirects = 0; !page; ) {
-      const hop = await fetchOnce(current, controller.signal);
-      if (hop.kind === "page") {
-        page = hop;
-        break;
+    let html: string;
+    let current: URL;
+    let retrievedVia: string | null = null;
+    try {
+      const { page, finalUrl } = await fetchFollowing(submitted, controller.signal, "html");
+      html = decodeHtml(page.body, page.contentType);
+      current = finalUrl;
+      if (isChallengePage(html)) {
+        console.warn("[url-ingest] site served a bot-protection challenge page");
+        throw siteBlocked();
       }
-      if (redirects === maxRedirects) {
-        throw new AppError(422, "TOO_MANY_REDIRECTS", "The page redirected too many times.");
-      }
-      redirects += 1;
-      current = validateUrl(new URL(hop.location, current).href, 422);
+    } catch (err) {
+      const title = err instanceof AppError && err.code === "SITE_BLOCKED" ? mediaWikiTitle(submitted) : null;
+      const viaApi = title ? await fetchMediaWikiArticle(submitted, title, controller.signal) : null;
+      if (!viaApi) throw err;
+      html = viaApi;
+      current = submitted;
+      retrievedVia = "MediaWiki API";
     }
 
-    const html = decodeHtml(page.body, page.contentType);
-    if (isChallengePage(html)) {
-      console.warn("[url-ingest] site served a bot-protection challenge page");
-      throw siteBlocked();
-    }
     const extracted = extractPage(html, current.href);
     if (extracted.text.replace(/\s/g, "").length < MIN_TEXT_CHARS) {
       throw new AppError(
@@ -369,6 +450,8 @@ export async function ingestUrl(rawUrl: string): Promise<IngestedPage> {
         finalUrl: current.href,
         fetchedAt: new Date().toISOString(),
         truncated,
+        // Recorded so the card says how its text was obtained.
+        ...(retrievedVia ? { retrievedVia } : {}),
       },
     };
   } catch (err) {

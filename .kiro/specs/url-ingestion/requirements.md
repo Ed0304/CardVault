@@ -54,6 +54,7 @@ URL ingestion allows users to create a knowledge card by providing a public URL.
   - A challenge page served with 200 ("Just a moment…", `/cdn-cgi/challenge-platform/`) → 422 `SITE_BLOCKED`, so a card is never made from the challenge itself.
   - 404/410 → 422 `FETCH_FAILED` "That page wasn't found".
   - Any other status → 422 `FETCH_FAILED` with the status.
+- **MediaWiki sites:** when a `/wiki/<Title>` (or `index.php?title=`) page is refused with `SITE_BLOCKED`, CardVault asks the same site's official MediaWiki API for that one article: `/w/api.php`, then `/api.php` (Fandom), with `action=parse`. This is the interface MediaWiki provides for programs, used under CardVault's own User-Agent. It is not a way around the protection, and the request gets the same address checks, redirect rules, deadline and size limits. The card's source metadata records `retrievedVia: "MediaWiki API"`. If the wiki reports the page missing, the result is "not found"; if there is no usable API, the original `SITE_BLOCKED` message stands. Verified live: Bulbapedia (`/w/api.php`) and Fandom (`/api.php`).
 - The messages suggest pasting the text instead. On the create page, a "Paste the text instead" button switches to the text form with the address kept as the source URL (for `SITE_BLOCKED`, `LOGIN_REQUIRED`, `EXTRACTION_FAILED` and `FETCH_TIMEOUT`).
 
 ### REQ-URL-009: Content Type Validation

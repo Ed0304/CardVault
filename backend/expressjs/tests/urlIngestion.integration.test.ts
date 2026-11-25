@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "@jest/globals";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "@jest/globals";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import zlib from "node:zlib";
@@ -54,6 +54,7 @@ const ARTICLE = `<!doctype html><html lang="en"><head>
 let port = 0;
 let lastUserAgent: string | undefined;
 let requestCount = 0;
+const apiCalls: string[] = [];
 
 const server = http.createServer((req, res) => {
   requestCount += 1;
@@ -94,6 +95,35 @@ const server = http.createServer((req, res) => {
   if (path === "/missing") {
     res.writeHead(404, { "content-type": "text/html" });
     return res.end("<p>Not found</p>");
+  }
+  // A MediaWiki site whose article pages are behind bot protection but whose API is open.
+  if (path.startsWith("/wiki/")) {
+    const page = decodeURIComponent(path.slice("/wiki/".length));
+    if (page === "Open_Page") return html(ARTICLE);
+    res.writeHead(403, { "content-type": "text/html", server: "cloudflare", "cf-mitigated": "challenge" });
+    return res.end("<title>Just a moment...</title>");
+  }
+  if (path === "/w/api.php" || path === "/api.php") {
+    apiCalls.push(`${path}?page=${url.searchParams.get("page")}`);
+    const page = url.searchParams.get("page");
+    const json = (status: number, body: unknown, type = "application/json; charset=utf-8") => {
+      res.writeHead(status, { "content-type": type });
+      res.end(typeof body === "string" ? body : JSON.stringify(body));
+    };
+    if (url.searchParams.get("action") !== "parse" || url.searchParams.get("format") !== "json") return json(400, {});
+    if (page === "Fallback Page" && path === "/w/api.php") {
+      return json(200, { parse: { title: "Fallback Page", text: `<div class="mw-parser-output"><p>Fallback article body. ${words(60)}</p></div>` } });
+    }
+    if (page === "Fandom Page" && path === "/api.php") {
+      return json(200, { parse: { title: "Fandom Page", text: `<p>Fandom style body. ${words(60)}</p>` } });
+    }
+    if (page === "Missing Page") return json(200, { error: { code: "missingtitle", info: "The page you specified doesn't exist." } });
+    if (page === "Html Api Page") return json(200, "<html>not json</html>", "text/html");
+    return json(404, {});
+  }
+  if (path === "/notwiki/page") {
+    res.writeHead(403, { "content-type": "text/html", server: "cloudflare" });
+    return res.end("<title>Attention Required! | Cloudflare</title>");
   }
   if (path === "/cf-block") {
     res.writeHead(403, { "content-type": "text/html", server: "cloudflare", "cf-ray": "test" });
@@ -345,6 +375,72 @@ describeIntegration("URL ingestion (real database, local web server)", () => {
       if (code !== "FETCH_FAILED") expect(res.body.message).toContain("paste its text instead");
       const after = await pool.query("SELECT count(*)::int AS n FROM knowledge_cards WHERE user_id = $1", [alice.userId]);
       expect(after.rows[0].n).toBe(before.rows[0].n);
+    });
+
+    describe("MediaWiki API fallback for refused wiki pages", () => {
+      beforeEach(() => {
+        apiCalls.length = 0;
+        allowTestServer();
+      });
+
+      it("reads a refused /wiki/ article through the site's api.php", async () => {
+        const res = await fromUrl(alice, local("/wiki/Fallback_Page"));
+        expect(res.status).toBe(201);
+        expect(res.body.data.sourceTitle).toBe("Fallback Page");
+        expect(res.body.data.sourceText).toContain("Fallback article body.");
+        expect(res.body.data.sourceUrl).toBe(local("/wiki/Fallback_Page"));
+        expect(res.body.data.sourceMeta).toMatchObject({
+          retrievedVia: "MediaWiki API",
+          finalUrl: local("/wiki/Fallback_Page"),
+          canonicalUrl: local("/wiki/Fallback_Page"),
+        });
+        expect(apiCalls).toEqual(["/w/api.php?page=Fallback Page"]);
+        expect(lastUserAgent).toMatch(/^CardVault\/1\.0/);
+      });
+
+      it("tries /api.php when /w/api.php is missing (Fandom-style sites)", async () => {
+        const res = await fromUrl(alice, local("/wiki/Fandom_Page"));
+        expect(res.status).toBe(201);
+        expect(res.body.data.sourceText).toContain("Fandom style body.");
+        expect(apiCalls).toEqual(["/w/api.php?page=Fandom Page", "/api.php?page=Fandom Page"]);
+      });
+
+      it("reports a page the wiki says doesn't exist as not found", async () => {
+        const res = await fromUrl(alice, local("/wiki/Missing_Page"));
+        expect(res.status).toBe(422);
+        expect(res.body.error.code).toBe("FETCH_FAILED");
+        expect(res.body.message).toContain("wasn't found");
+      });
+
+      it.each([
+        ["no API at either path", "/wiki/No_Api_Page"],
+        ["an API that answers with HTML", "/wiki/Html_Api_Page"],
+      ])("keeps the blocked message when there is %s", async (_label, path) => {
+        const res = await fromUrl(alice, local(path));
+        expect(res.status).toBe(422);
+        expect(res.body.error.code).toBe("SITE_BLOCKED");
+      });
+
+      it("doesn't try the API for addresses that aren't wiki articles", async () => {
+        const res = await fromUrl(alice, local("/notwiki/page"));
+        expect(res.body.error.code).toBe("SITE_BLOCKED");
+        expect(apiCalls).toEqual([]);
+      });
+
+      it("doesn't use the API when the page itself loads", async () => {
+        const res = await fromUrl(alice, local("/wiki/Open_Page"));
+        expect(res.status).toBe(201);
+        expect(res.body.data.sourceMeta.retrievedVia).toBeUndefined();
+        expect(apiCalls).toEqual([]);
+      });
+
+      it("keeps the production address policy for the API request", async () => {
+        // The article URL is refused before any request; no API call can follow.
+        Object.assign(ingestionPolicy, strictPolicy);
+        ingestionPolicy.isAllowedPort = (p) => p === String(port);
+        expect((await fromUrl(alice, local("/wiki/Fallback_Page"))).body.error.code).toBe("SSRF_BLOCKED");
+        expect(apiCalls).toEqual([]);
+      });
     });
 
     it.each([

@@ -26,6 +26,8 @@
 
 - [x] **TASK-URL-020** Explain refusals (REQ-URL-008a): `LOGIN_REQUIRED`, `SITE_BLOCKED` (403, 429, protected 503, 200 challenge pages), clearer 404; no circumvention. "Paste the text instead" on the create page keeps the URL as the source. Verified by 7 new cases in `tests/urlIngestion.integration.test.ts` (248 backend tests pass), the frontend build, and a live probe: Namu Wiki → `SITE_BLOCKED`; Know Your Meme and Wikipedia saved normally from a home connection.
 
+- [x] **TASK-URL-021** MediaWiki API fallback for refused `/wiki/` pages (REQ-URL-008a): `/w/api.php` then `/api.php`, `action=parse`, same guarded fetch; `retrievedVia` in source metadata and on the card page. Verified by 9 new integration tests (256 backend tests pass) and live: Bulbapedia's Scream Tail article (blocked page, API 200, 13,981 characters), Fandom's Jigglypuff article, and a missing page reported as not found.
+
 ## Remaining
 
 - [ ] **TASK-URL-017** Manual browser check of the From URL flow.

@@ -30,8 +30,10 @@ class Settings(BaseSettings):
     catalog_reasoning_effort: Literal["minimal", "low", "medium", "high"] = Field(
         "low", alias="MUSE_CATALOG_REASONING_EFFORT"
     )
-    # Covers reasoning plus the JSON answer.
-    catalog_max_output_tokens: int = Field(4000, ge=500, le=32_000, alias="MUSE_CATALOG_MAX_OUTPUT_TOKENS")
+    # Covers the model's hidden reasoning plus the JSON answer: reasoning tokens count against this
+    # budget. 4,000 proved too small for the structured entry on muse-spark-1.3 (the budget ran out
+    # during reasoning, with no answer). Billed only for tokens actually used.
+    catalog_max_output_tokens: int = Field(16_000, ge=500, le=32_000, alias="MUSE_CATALOG_MAX_OUTPUT_TOKENS")
     # Longer source text is cut before it is sent, which bounds cost and latency per card.
     catalog_max_input_chars: int = Field(40_000, ge=1_000, le=100_000, alias="CATALOG_MAX_INPUT_CHARS")
 

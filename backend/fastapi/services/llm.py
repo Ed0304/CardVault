@@ -218,17 +218,24 @@ def _clip(value: object) -> str:
     return _clean_label(value) if isinstance(value, str) else ""
 
 
-# Site and publisher suffixes in page titles, e.g. "Topic - Wikipedia" or "Topic | Site".
-_TITLE_SUFFIX = re.compile(r"\s+[-–—|·:]\s+[^-–—|·:]{1,60}$")
+# The separator before a site or publisher suffix in a page title: a dash, bar or dot with spaces
+# around it ("Topic - Wikipedia", "Topic | Site"). Not ":", which belongs to titles such as
+# "Star Wars: A New Hope", and not a bare hyphen, as in "community-driven".
+_TITLE_SEPARATOR = re.compile(r"\s[-–—|·]\s")
+_MAX_SUFFIX_CHARS = 80
 
 
 def fallback_title(source_title: str | None) -> str | None:
-    """The source title without a trailing " - Site" part, for when the model gives no title."""
+    """The source title without its trailing " - Site" part, for when the model gives no title."""
     if not source_title:
         return None
     title = _clean_label(source_title)
-    stripped = _TITLE_SUFFIX.sub("", title).strip()
-    title = stripped or title
+    separators = list(_TITLE_SEPARATOR.finditer(title))
+    if separators:
+        last = separators[-1]
+        head, suffix = title[: last.start()].strip(), title[last.end() :].strip()
+        if head and len(suffix) <= _MAX_SUFFIX_CHARS:
+            title = head
     return title[:MAX_TITLE_CHARS] if title else None
 
 
@@ -415,35 +422,50 @@ class MuseCatalogClient:
             output_tokens=getattr(completion.usage, "completion_tokens", None),
         )
 
+        details = getattr(completion.usage, "completion_tokens_details", None)
+        reasoning_tokens = getattr(details, "reasoning_tokens", None)
+
         try:
+            # Checked first: when the budget runs out during reasoning, there is no content either,
+            # and "no content" would hide the real cause.
+            if choice is not None and choice.finish_reason == "length":
+                raise InvalidModelOutput(
+                    "The model used its whole output budget before finishing the answer "
+                    "(raise MUSE_CATALOG_MAX_OUTPUT_TOKENS or lower MUSE_CATALOG_REASONING_EFFORT)"
+                )
             if choice is None or not content:
                 raise InvalidModelOutput("The model returned no content")
-            if choice.finish_reason == "length":
-                raise InvalidModelOutput("The model ran out of output tokens")
             parsed = ModelCatalogOutput.model_validate(json.loads(content))
             # Checked against exactly the text the model was given.
             entry = normalise(parsed, request.text[: settings.catalog_max_input_chars], request.title)
         except (ValueError, InvalidModelOutput) as error:
             # json.JSONDecodeError and pydantic.ValidationError are both ValueErrors.
             logger.warning(
-                "catalog output rejected model=%s reason=%s detail=%s output_tokens=%s",
+                "catalog output rejected model=%s reason=%s detail=%s output_tokens=%s reasoning_tokens=%s "
+                "budget=%s effort=%s finish_reason=%s",
                 used_model,
                 type(error).__name__,
                 # Only our own fixed messages; never model output or card text.
                 error.message if isinstance(error, InvalidModelOutput) else "invalid JSON or shape",
                 usage.output_tokens,
+                reasoning_tokens,
+                settings.catalog_max_output_tokens,
+                settings.catalog_reasoning_effort,
+                getattr(choice, "finish_reason", None),
             )
             if isinstance(error, InvalidModelOutput):
                 raise
             raise InvalidModelOutput("The model returned malformed JSON") from error
 
         logger.info(
-            "catalog generated model=%s input_chars=%d truncated=%s input_tokens=%s output_tokens=%s duration_ms=%d",
+            "catalog generated model=%s input_chars=%d truncated=%s input_tokens=%s output_tokens=%s "
+            "reasoning_tokens=%s duration_ms=%d",
             used_model,
             len(request.text),
             truncated,
             usage.input_tokens,
             usage.output_tokens,
+            reasoning_tokens,
             (time.monotonic() - started) * 1000,
         )
         return CatalogResponse(

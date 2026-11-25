@@ -71,6 +71,13 @@ class TestTitle:
         assert fallback_title("A — B — Encyclopedia") == "A — B"
         assert fallback_title("Plain title") == "Plain title"
         assert fallback_title(None) is None
+        # A site name with its own hyphen, and colons that belong to the title.
+        assert (
+            fallback_title("Scream Tail (Pokémon) - Bulbapedia, the community-driven Pokémon encyclopedia")
+            == "Scream Tail (Pokémon)"
+        )
+        assert fallback_title("Star Wars: A New Hope") == "Star Wars: A New Hope"
+        assert fallback_title("Spider-Man") == "Spider-Man"
 
 
 class TestFacts:
@@ -166,6 +173,23 @@ class TestCopyrightSafety:
         assert "Never copy" in SYSTEM_PROMPT
         assert "Only include relationships the document states" in SYSTEM_PROMPT
         assert "60 words" in SYSTEM_PROMPT
+
+
+def test_reports_a_budget_used_up_by_reasoning_with_the_real_cause(client, caplog):
+    # What production showed: finish_reason "length", no content, output_tokens == budget.
+    use_provider(completion(None, finish_reason="length"))
+    with caplog.at_level("WARNING", logger="cardvault.ai.catalog"):
+        res = client.post("/catalog", json={"title": "T", "text": SOURCE}, headers=AUTH)
+    assert res.status_code == 502
+    assert res.json()["error"]["code"] == "INVALID_MODEL_OUTPUT"
+    assert "whole output budget" in caplog.text
+    assert "no content" not in caplog.text
+
+
+def test_sends_a_budget_large_enough_for_reasoning(client):
+    calls = use_provider(completion(entry()))
+    client.post("/catalog", json={"title": "T", "text": SOURCE}, headers=AUTH)
+    assert calls.calls[0]["max_tokens"] == 16_000
 
 
 def test_accepts_an_answer_in_the_older_shape(client):

@@ -20,6 +20,7 @@ const SOURCE_META_FIELDS: { key: string; label: string; kind: 'text' | 'date' | 
   { key: 'author', label: 'Author', kind: 'text' },
   { key: 'publishedAt', label: 'Published', kind: 'date' },
   { key: 'fetchedAt', label: 'Saved from the web', kind: 'date' },
+  { key: 'retrievedVia', label: 'Read through', kind: 'text' },
   { key: 'canonicalUrl', label: 'Canonical address', kind: 'url' },
   { key: 'finalUrl', label: 'Read from', kind: 'url' },
 ]
