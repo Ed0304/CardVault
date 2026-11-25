@@ -22,6 +22,35 @@ export type CatalogOutcome =
   /** The service or provider refused, or the answer was unusable. */
   | { ok: false; reason: "failed" };
 
+/** The AI service's origin for logs, e.g. "http://fastapi.railway.internal:8000" (never the token). */
+function describeTarget(serviceUrl: string): string {
+  try {
+    const url = new URL(serviceUrl);
+    return `${url.protocol}//${url.hostname}:${url.port || (url.protocol === "https:" ? "443" : "80")}`;
+  } catch {
+    return "an invalid AI_SERVICE_URL";
+  }
+}
+
+/** The innermost network error code, e.g. ECONNREFUSED, ENOTFOUND, UND_ERR_CONNECT_TIMEOUT. */
+function describeCause(err: unknown): string {
+  const codes: string[] = [];
+  let current: unknown = err;
+  for (let depth = 0; current && depth < 6; depth++) {
+    const e = current as { code?: unknown; cause?: unknown; errors?: unknown[] };
+    if (typeof e.code === "string") codes.push(e.code);
+    // Connection attempts to several addresses fail together as an AggregateError.
+    if (Array.isArray(e.errors)) {
+      for (const inner of e.errors) {
+        const code = (inner as { code?: unknown } | null)?.code;
+        if (typeof code === "string") codes.push(code);
+      }
+    }
+    current = e.cause;
+  }
+  return codes.length ? [...new Set(codes)].join(", ") : err instanceof Error ? err.name : "unknown error";
+}
+
 export function isCatalogEnabled(): boolean {
   return Boolean(config.ai.serviceUrl && config.ai.serviceToken);
 }
@@ -40,13 +69,26 @@ export async function catalogCard(input: CatalogInput): Promise<CatalogOutcome> 
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
-    const kind = err instanceof Error && err.name === "TimeoutError" ? "timeout" : "unreachable";
-    console.warn(`[ai] catalog request ${kind} after ${Date.now() - started} ms`);
+    const target = describeTarget(serviceUrl);
+    if (err instanceof Error && err.name === "TimeoutError") {
+      console.warn(`[ai] catalog request to ${target} timed out after ${Date.now() - started} ms`);
+    } else {
+      console.warn(
+        `[ai] catalog request to ${target} could not connect (${describeCause(err)}) after ${Date.now() - started} ms`,
+      );
+    }
     return { ok: false, reason: "unavailable" };
   }
 
   if (!response.ok) {
-    console.warn(`[ai] catalog service answered ${response.status} after ${Date.now() - started} ms`);
+    // FastAPI's error code (e.g. PROVIDER_UNAVAILABLE) says whether the provider or the service failed.
+    const code = await response
+      .json()
+      .then((b: { error?: { code?: unknown }; detail?: { code?: unknown } }) => b?.error?.code ?? b?.detail?.code)
+      .catch(() => undefined);
+    console.warn(
+      `[ai] catalog service answered ${response.status}${typeof code === "string" ? ` ${code}` : ""} after ${Date.now() - started} ms`,
+    );
     return { ok: false, reason: response.status === 503 ? "unavailable" : "failed" };
   }
 

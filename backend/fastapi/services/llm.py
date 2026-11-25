@@ -212,11 +212,17 @@ class MuseCatalogClient:
             )
         except openai.OpenAIError as error:
             failure = _classify(error)
+            # The provider's error type and code (e.g. "insufficient_quota") and, for network
+            # failures, the underlying exception class. Never the message, which may echo input.
+            cause = error.__cause__
             logger.warning(
-                "catalog request failed model=%s error=%s status=%s duration_ms=%d",
+                "catalog request failed model=%s error=%s status=%s provider_type=%s provider_code=%s cause=%s duration_ms=%d",
                 settings.catalog_model,
                 type(error).__name__,
                 getattr(error, "status_code", None),
+                getattr(error, "type", None),
+                getattr(error, "code", None),
+                type(cause).__name__ if cause else None,
                 (time.monotonic() - started) * 1000,
             )
             raise failure from error
