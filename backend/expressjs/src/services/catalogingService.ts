@@ -91,7 +91,18 @@ export async function requestCatalog(userId: string, cardId: string): Promise<Ca
   });
 
   if (outcome.ok) {
-    const draft: CatalogDraft = { ...outcome.result, generatedAt: new Date().toISOString() };
+    const { title, summary, facts, subjects, keywords, related, model, truncated } = outcome.result;
+    const draft: CatalogDraft = {
+      catalogTitle: title,
+      summary,
+      facts,
+      subjects,
+      keywords,
+      related,
+      model,
+      truncated,
+      generatedAt: new Date().toISOString(),
+    };
     // Written only if this request still owns the claim; the card's metadata is not touched.
     await pool.query(
       `UPDATE knowledge_cards

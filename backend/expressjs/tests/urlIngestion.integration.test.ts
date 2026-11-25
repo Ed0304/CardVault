@@ -95,6 +95,36 @@ const server = http.createServer((req, res) => {
     res.writeHead(404, { "content-type": "text/html" });
     return res.end("<p>Not found</p>");
   }
+  if (path === "/cf-block") {
+    res.writeHead(403, { "content-type": "text/html", server: "cloudflare", "cf-ray": "test" });
+    return res.end("<title>Attention Required! | Cloudflare</title>");
+  }
+  if (path === "/plain-403") {
+    res.writeHead(403, { "content-type": "text/html" });
+    return res.end("<p>Forbidden</p>");
+  }
+  if (path === "/login") {
+    res.writeHead(401, { "content-type": "text/html", "www-authenticate": "Basic" });
+    return res.end("<p>Sign in</p>");
+  }
+  if (path === "/rate") {
+    res.writeHead(429, { "content-type": "text/html", "retry-after": "60" });
+    return res.end("<p>Slow down</p>");
+  }
+  if (path === "/cf-503") {
+    res.writeHead(503, { "content-type": "text/html", server: "cloudflare" });
+    return res.end("<title>Just a moment...</title>");
+  }
+  if (path === "/plain-503") {
+    res.writeHead(503, { "content-type": "text/html" });
+    return res.end("<p>Maintenance</p>");
+  }
+  if (path === "/challenge-200") {
+    return html(
+      `<html><head><title>Just a moment...</title></head><body><p>${words(80)}</p>` +
+        `<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script></body></html>`,
+    );
+  }
   if (path === "/empty") return html("<html><body><div id=app></div><script>render()</script></body></html>");
   if (path === "/big") {
     res.writeHead(200, { "content-type": "text/html" });
@@ -294,6 +324,25 @@ describeIntegration("URL ingestion (real database, local web server)", () => {
       const res = await fromUrl(alice, local(path));
       expect(res.status).toBe(422);
       expect(res.body.error.code).toBe(code);
+      const after = await pool.query("SELECT count(*)::int AS n FROM knowledge_cards WHERE user_id = $1", [alice.userId]);
+      expect(after.rows[0].n).toBe(before.rows[0].n);
+    });
+
+    it.each([
+      ["a Cloudflare block (403)", "/cf-block", "SITE_BLOCKED"],
+      ["a plain 403", "/plain-403", "SITE_BLOCKED"],
+      ["a rate limit (429)", "/rate", "SITE_BLOCKED"],
+      ["a Cloudflare challenge (503)", "/cf-503", "SITE_BLOCKED"],
+      ["a challenge page served with 200", "/challenge-200", "SITE_BLOCKED"],
+      ["a login wall (401)", "/login", "LOGIN_REQUIRED"],
+      ["an ordinary outage (503)", "/plain-503", "FETCH_FAILED"],
+    ])("explains %s and saves nothing", async (_label, path, code) => {
+      allowTestServer();
+      const before = await pool.query("SELECT count(*)::int AS n FROM knowledge_cards WHERE user_id = $1", [alice.userId]);
+      const res = await fromUrl(alice, local(path));
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(code);
+      if (code !== "FETCH_FAILED") expect(res.body.message).toContain("paste its text instead");
       const after = await pool.query("SELECT count(*)::int AS n FROM knowledge_cards WHERE user_id = $1", [alice.userId]);
       expect(after.rows[0].n).toBe(before.rows[0].n);
     });

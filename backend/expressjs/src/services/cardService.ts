@@ -10,6 +10,7 @@ import type {
   UpdateAiMetadataInput,
   UpdateNotesInput,
 } from "../schemas/cards.schemas.js";
+import type { Fact, RelatedConcept } from "../schemas/ai.schemas.js";
 
 export type AiStatus = "PENDING" | "COMPLETE" | "FAILED" | "NOT_AVAILABLE";
 export type Visibility = "PRIVATE" | "PUBLIC";
@@ -24,8 +25,16 @@ export interface SavedFrom {
   originalAvailable: boolean;
 }
 
+/** A related concept as shown: linked to a card when one with that title exists. */
+export interface RelatedConceptLink extends RelatedConcept {
+  /** A card the viewer can open for this concept, or null. Worked out on read, never stored. */
+  cardId: string | null;
+}
+
 export interface CardSummary {
   id: string;
+  /** The catalog entry's own heading; null means "use the source title". */
+  catalogTitle: string | null;
   sourceTitle: string | null;
   sourceUrl: string | null;
   aiSummary: string | null;
@@ -45,6 +54,9 @@ export interface CardDetail extends CardSummary {
   sourceMeta: Record<string, unknown> | null;
   notes: string | null;
   aiKeywords: string[];
+  /** Factual attributes, e.g. [{ label: "Author", value: "Jane Doe" }]. */
+  aiFacts: Fact[];
+  aiRelated: RelatedConceptLink[];
   /** Whether the public card includes the source text (only meaningful while PUBLIC). */
   shareSourceText: boolean;
   /** AI suggestions awaiting the owner's review; never shown on public cards. */
@@ -54,9 +66,13 @@ export interface CardDetail extends CardSummary {
 
 /** A Muse catalog suggestion. It changes nothing on the card until the owner saves it. */
 export interface CatalogDraft {
+  /** Suggested catalog title; null when Muse found none. (Absent in drafts made before it.) */
+  catalogTitle: string | null;
   summary: string;
+  facts: Fact[];
   subjects: string[];
   keywords: string[];
+  related: RelatedConcept[];
   /** The model that wrote it, shown with the suggestion. */
   model: string;
   /** True when only the first part of a long source text was cataloged. */
@@ -90,6 +106,14 @@ export function deriveTitle(sourceText: string): string {
     : firstLine;
 }
 
+/** SQL matching a LIKE parameter against fact labels and values and related-concept names. */
+export function catalogJsonMatches(alias: string, param: string): string {
+  return `EXISTS (SELECT 1 FROM jsonb_array_elements(${alias}.ai_facts) f
+                   WHERE f->>'label' ILIKE ${param} ESCAPE '\\' OR f->>'value' ILIKE ${param} ESCAPE '\\')
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements(${alias}.ai_related) r
+                   WHERE r->>'name' ILIKE ${param} ESCAPE '\\')`;
+}
+
 /** A LIKE pattern that matches `query` literally anywhere (wildcards in it are escaped). */
 export function likePattern(query: string): string {
   return `%${query.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
@@ -117,7 +141,7 @@ export async function cardBelongsToUser(userId: string, cardId: string): Promise
 // Columns shared by list and detail queries. Collection and tags are joined through the
 // card's own user_id, so another user's collection or tag can never appear on a card.
 const SUMMARY_COLUMNS = `
-  c.id, c.source_title, c.source_url, c.ai_summary, c.ai_subjects,
+  c.id, c.catalog_title, c.source_title, c.source_url, c.ai_summary, c.ai_subjects,
   c.ai_catalog_status, c.ai_embedding_status, c.created_at,
   c.visibility, c.published_at, c.saved_from_card_id, c.saved_from_author,
   (c.saved_from_card_id IS NOT NULL AND EXISTS (
@@ -134,8 +158,8 @@ const SUMMARY_COLUMNS = `
   ) AS tags`;
 
 const DETAIL_COLUMNS = `${SUMMARY_COLUMNS},
-  c.source_text, c.source_meta, c.notes, c.ai_keywords, c.share_source_text, c.ai_catalog_draft,
-  c.updated_at`;
+  c.source_text, c.source_meta, c.notes, c.ai_keywords, c.ai_facts, c.ai_related,
+  c.share_source_text, c.ai_catalog_draft, c.updated_at`;
 
 const FROM_CARDS = `
   FROM knowledge_cards c
@@ -143,6 +167,7 @@ const FROM_CARDS = `
 
 interface CardRow {
   id: string;
+  catalog_title: string | null;
   source_title: string | null;
   source_url: string | null;
   ai_summary: string | null;
@@ -162,14 +187,65 @@ interface CardRow {
   source_meta?: Record<string, unknown> | null;
   notes?: string | null;
   ai_keywords?: string[];
+  ai_facts?: Fact[];
+  ai_related?: RelatedConcept[];
   share_source_text?: boolean;
-  ai_catalog_draft?: CatalogDraft | null;
+  ai_catalog_draft?: Partial<CatalogDraft> | null;
   updated_at?: Date;
+}
+
+/** Drafts made before the structured fields existed lack them; fill in empty values. */
+function toDraft(draft: Partial<CatalogDraft> | null | undefined): CatalogDraft | null {
+  if (!draft) return null;
+  return {
+    catalogTitle: draft.catalogTitle ?? null,
+    summary: draft.summary ?? "",
+    facts: draft.facts ?? [],
+    subjects: draft.subjects ?? [],
+    keywords: draft.keywords ?? [],
+    related: draft.related ?? [],
+    model: draft.model ?? "",
+    truncated: draft.truncated ?? false,
+    generatedAt: draft.generatedAt ?? "",
+  };
+}
+
+/**
+ * Links related concepts to cards with a matching title (catalog title or source title,
+ * case-insensitive). `scope` decides which cards may be linked: the owner's own cards, or
+ * published cards for the public view. The card itself is never linked.
+ */
+export async function linkRelated(
+  related: RelatedConcept[],
+  excludeCardId: string,
+  scope: { userId: string } | { publicOnly: true },
+): Promise<RelatedConceptLink[]> {
+  if (related.length === 0) return [];
+  const names = related.map((r) => r.name.trim().toLowerCase());
+  const scopeSql = "userId" in scope ? "user_id = $3" : "visibility = 'PUBLIC'";
+  const params: unknown[] = [names, excludeCardId];
+  if ("userId" in scope) params.push(scope.userId);
+
+  const result = await pool.query<{ id: string; catalog: string | null; source: string | null }>(
+    `SELECT id, lower(btrim(catalog_title)) AS catalog, lower(btrim(source_title)) AS source
+       FROM knowledge_cards
+      WHERE ${scopeSql} AND id <> $2
+        AND (lower(btrim(catalog_title)) = ANY($1::text[]) OR lower(btrim(source_title)) = ANY($1::text[]))
+      ORDER BY created_at DESC`,
+    params,
+  );
+  // A catalog-title match wins over a source-title match; otherwise the newest card wins.
+  const byName = new Map<string, string>();
+  for (const row of result.rows) if (row.catalog && !byName.has(row.catalog)) byName.set(row.catalog, row.id);
+  for (const row of result.rows) if (row.source && !byName.has(row.source)) byName.set(row.source, row.id);
+
+  return related.map((r) => ({ ...r, cardId: byName.get(r.name.trim().toLowerCase()) ?? null }));
 }
 
 function toSummary(row: CardRow): CardSummary {
   return {
     id: row.id,
+    catalogTitle: row.catalog_title,
     sourceTitle: row.source_title,
     sourceUrl: row.source_url,
     aiSummary: row.ai_summary,
@@ -202,8 +278,11 @@ function toDetail(row: CardRow): CardDetail {
     sourceMeta: row.source_meta ?? null,
     notes: row.notes ?? null,
     aiKeywords: row.ai_keywords ?? [],
+    aiFacts: row.ai_facts ?? [],
+    // Linked in getCard; plain here.
+    aiRelated: (row.ai_related ?? []).map((r) => ({ ...r, cardId: null })),
     shareSourceText: row.share_source_text ?? false,
-    aiCatalogDraft: row.ai_catalog_draft ?? null,
+    aiCatalogDraft: toDraft(row.ai_catalog_draft),
     updatedAt: (row.updated_at ?? row.created_at).toISOString(),
   };
 }
@@ -218,7 +297,9 @@ export async function getCard(userId: string, cardId: string): Promise<CardDetai
   );
   const row = result.rows[0];
   if (!row) throw cardNotFound();
-  return toDetail(row);
+  const card = toDetail(row);
+  card.aiRelated = await linkRelated(row.ai_related ?? [], cardId, { userId });
+  return card;
 }
 
 /**
@@ -277,12 +358,14 @@ export async function listCards(userId: string, query: ListCardsQuery): Promise<
     params.push(likePattern(query.q));
     const p = `$${params.length}`;
     conditions.push(`(
-      c.source_title ILIKE ${p} ESCAPE '\\'
+      c.catalog_title ILIKE ${p} ESCAPE '\\'
+      OR c.source_title ILIKE ${p} ESCAPE '\\'
       OR c.source_text ILIKE ${p} ESCAPE '\\'
       OR c.notes ILIKE ${p} ESCAPE '\\'
       OR c.ai_summary ILIKE ${p} ESCAPE '\\'
       OR array_to_string(c.ai_subjects, ' ') ILIKE ${p} ESCAPE '\\'
       OR array_to_string(c.ai_keywords, ' ') ILIKE ${p} ESCAPE '\\'
+      OR ${catalogJsonMatches("c", p)}
     )`);
   }
   const where = `WHERE ${conditions.join(" AND ")}`;
@@ -347,6 +430,18 @@ export async function updateAiMetadata(
   if (input.aiKeywords !== undefined) {
     params.push(input.aiKeywords);
     sets.push(`ai_keywords = $${params.length}`);
+  }
+  if (input.catalogTitle !== undefined) {
+    params.push(input.catalogTitle);
+    sets.push(`catalog_title = $${params.length}`);
+  }
+  if (input.aiFacts !== undefined) {
+    params.push(JSON.stringify(input.aiFacts));
+    sets.push(`ai_facts = $${params.length}::jsonb`);
+  }
+  if (input.aiRelated !== undefined) {
+    params.push(JSON.stringify(input.aiRelated));
+    sets.push(`ai_related = $${params.length}::jsonb`);
   }
 
   // Saving catalog details resolves any pending AI suggestion: the owner has either accepted it

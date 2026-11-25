@@ -6,10 +6,14 @@ import {
   assertCardId,
   cardNotFound,
   getCard,
+  catalogJsonMatches,
   initialAiStatuses,
   likePattern,
+  linkRelated,
   type CardDetail,
+  type RelatedConceptLink,
 } from "./cardService.js";
+import type { Fact, RelatedConcept } from "../schemas/ai.schemas.js";
 
 /**
  * Community Catalog: published cards as other users see them (REQ-CAT-012 to REQ-CAT-014).
@@ -26,6 +30,7 @@ export interface PublicAuthor {
 
 export interface PublicCardSummary {
   id: string;
+  catalogTitle: string | null;
   sourceTitle: string | null;
   sourceUrl: string | null;
   aiSummary: string | null;
@@ -38,6 +43,9 @@ export interface PublicCardSummary {
 }
 
 export interface PublicCardDetail extends PublicCardSummary {
+  aiFacts: Fact[];
+  /** Linked only to other published cards. */
+  aiRelated: RelatedConceptLink[];
   /** The original text, or null when the author did not share it. */
   sourceText: string | null;
   /** Facts about the signed-in viewer, so the UI can offer the right action. */
@@ -58,7 +66,8 @@ export interface PublicCardPage {
 // The approved public fields. source_text is deliberately absent: it is selected separately and
 // only when share_source_text is true.
 const PUBLIC_COLUMNS = `
-  c.id, c.source_title, c.source_url, c.ai_summary, c.ai_subjects, c.ai_keywords, c.published_at,
+  c.id, c.catalog_title, c.source_title, c.source_url, c.ai_summary, c.ai_subjects, c.ai_keywords,
+  c.published_at,
   (c.share_source_text AND c.source_text <> '') AS has_source_text,
   u.username AS author_username`;
 
@@ -68,6 +77,7 @@ const FROM_PUBLIC = `
 
 interface PublicRow {
   id: string;
+  catalog_title: string | null;
   source_title: string | null;
   source_url: string | null;
   ai_summary: string | null;
@@ -79,6 +89,8 @@ interface PublicRow {
 }
 
 interface PublicDetailRow extends PublicRow {
+  ai_facts: Fact[];
+  ai_related: RelatedConcept[];
   shared_source_text: string | null;
   is_owner: boolean;
   saved_card_id: string | null;
@@ -87,6 +99,7 @@ interface PublicDetailRow extends PublicRow {
 function toPublicSummary(row: PublicRow): PublicCardSummary {
   return {
     id: row.id,
+    catalogTitle: row.catalog_title,
     sourceTitle: row.source_title,
     sourceUrl: row.source_url,
     aiSummary: row.ai_summary,
@@ -111,8 +124,10 @@ export async function listPublicCards(query: ListPublicCardsQuery): Promise<Publ
     params.push(likePattern(query.q));
     const p = `$${params.length}`;
     conditions.push(`(
-      c.source_title ILIKE ${p} ESCAPE '\\'
+      c.catalog_title ILIKE ${p} ESCAPE '\\'
+      OR c.source_title ILIKE ${p} ESCAPE '\\'
       OR c.ai_summary ILIKE ${p} ESCAPE '\\'
+      OR ${catalogJsonMatches("c", p)}
       OR array_to_string(c.ai_subjects, ' ') ILIKE ${p} ESCAPE '\\'
       OR array_to_string(c.ai_keywords, ' ') ILIKE ${p} ESCAPE '\\'
       OR (c.share_source_text AND c.source_text ILIKE ${p} ESCAPE '\\')
@@ -142,7 +157,7 @@ export async function listPublicCards(query: ListPublicCardsQuery): Promise<Publ
 export async function getPublicCard(viewerId: string, cardId: string): Promise<PublicCardDetail> {
   assertCardId(cardId);
   const result = await pool.query<PublicDetailRow>(
-    `SELECT ${PUBLIC_COLUMNS},
+    `SELECT ${PUBLIC_COLUMNS}, c.ai_facts, c.ai_related,
             CASE WHEN c.share_source_text THEN c.source_text END AS shared_source_text,
             (c.user_id = $2) AS is_owner,
             (SELECT s.id FROM knowledge_cards s
@@ -155,6 +170,8 @@ export async function getPublicCard(viewerId: string, cardId: string): Promise<P
   if (!row) throw cardNotFound();
   return {
     ...toPublicSummary(row),
+    aiFacts: row.ai_facts,
+    aiRelated: await linkRelated(row.ai_related, cardId, { publicOnly: true }),
     sourceText: row.has_source_text ? row.shared_source_text : null,
     viewer: { isOwner: row.is_owner, savedCardId: row.saved_card_id },
   };
@@ -162,6 +179,9 @@ export async function getPublicCard(viewerId: string, cardId: string): Promise<P
 
 interface OriginalRow {
   user_id: string;
+  catalog_title: string | null;
+  ai_facts: Fact[];
+  ai_related: RelatedConcept[];
   source_title: string | null;
   source_url: string | null;
   ai_summary: string | null;
@@ -191,7 +211,8 @@ export async function saveToVault(userId: string, cardId: string): Promise<CardD
   try {
     await client.query("BEGIN");
     const original = await client.query<OriginalRow>(
-      `SELECT c.user_id, c.source_title, c.source_url, c.ai_summary, c.ai_subjects, c.ai_keywords,
+      `SELECT c.user_id, c.catalog_title, c.source_title, c.source_url, c.ai_summary, c.ai_subjects,
+              c.ai_keywords, c.ai_facts, c.ai_related,
               CASE WHEN c.share_source_text THEN c.source_text ELSE '' END AS shared_source_text,
               u.username AS author_username
          FROM knowledge_cards c
@@ -209,18 +230,22 @@ export async function saveToVault(userId: string, cardId: string): Promise<CardD
     const statuses = initialAiStatuses();
     const inserted = await client.query<{ id: string }>(
       `INSERT INTO knowledge_cards
-         (user_id, source_text, source_title, source_url, ai_summary, ai_subjects, ai_keywords,
+         (user_id, source_text, source_title, source_url, catalog_title, ai_summary, ai_subjects,
+          ai_keywords, ai_facts, ai_related,
           ai_catalog_status, ai_embedding_status, saved_from_card_id, saved_from_author)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14)
        RETURNING id`,
       [
         userId,
         row.shared_source_text,
         row.source_title,
         row.source_url,
+        row.catalog_title,
         row.ai_summary,
         row.ai_subjects,
         row.ai_keywords,
+        JSON.stringify(row.ai_facts),
+        JSON.stringify(row.ai_related),
         statuses.catalog,
         statuses.embedding,
         cardId,

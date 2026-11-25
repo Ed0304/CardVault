@@ -28,7 +28,10 @@ const onSave = async () => {
     <CommonAppAlert v-else-if="error" title="Couldn't open this card">{{ error }}</CommonAppAlert>
 
     <article v-else-if="card" class="detail">
-      <CommonPageHeading :title="card.sourceTitle ?? 'Untitled'" :eyebrow="`Community card · No. ${shortId(card.id)}`">
+      <CommonPageHeading
+        :title="displayTitle(card)"
+        :eyebrow="`Community catalog entry · No. ${shortId(card.id)}${card.aiSubjects[0] ? ` · ${card.aiSubjects[0]}` : ''}`"
+      >
         <template #meta>
           <span class="author">
             <CommonAppIcon name="user" :size="14" />
@@ -63,13 +66,25 @@ const onSave = async () => {
         <CommonAppAlert v-if="saveError" title="Not saved">{{ saveError }}</CommonAppAlert>
       </div>
 
-      <div class="detail__grid">
+      <div class="detail__stack">
+        <AiMetadata
+          eyebrow="Catalog entry · published by the author"
+          :summary="card.aiSummary"
+          :facts="card.aiFacts"
+          :subjects="card.aiSubjects"
+          :keywords="card.aiKeywords"
+          :related="card.aiRelated"
+          related-link-base="/community/"
+        />
+
         <section class="surface detail-section" aria-labelledby="source-heading">
           <header class="detail-section__header">
             <span class="detail-section__icon"><CommonAppIcon name="file-text" :size="18" /></span>
             <div>
-              <p class="eyebrow">Source</p>
-              <h2 id="source-heading" class="detail-section__title">Original</h2>
+              <p class="eyebrow">Original source</p>
+              <h2 id="source-heading" class="detail-section__title">
+                {{ card.sourceTitle?.trim() || hostnameOf(card.sourceUrl) || 'Source' }}
+              </h2>
             </div>
           </header>
 
@@ -87,15 +102,6 @@ const onSave = async () => {
             <template v-if="card.sourceUrl">Follow the source link to read it.</template>
           </p>
         </section>
-
-        <aside>
-          <AiMetadata
-            eyebrow="Catalog entry · published by the author"
-            :summary="card.aiSummary"
-            :subjects="card.aiSubjects"
-            :keywords="card.aiKeywords"
-          />
-        </aside>
       </div>
     </article>
   </section>
@@ -121,10 +127,11 @@ const onSave = async () => {
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
-.detail__grid {
-  display: grid;
+.detail__stack {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-5);
-  align-items: start;
+  max-width: 56rem;
   margin-top: var(--space-5);
 }
 .detail-section {
@@ -169,11 +176,5 @@ const onSave = async () => {
   line-height: var(--leading-relaxed);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-@media (min-width: 64rem) {
-  .detail__grid {
-    grid-template-columns: minmax(0, 1fr) 21rem;
-    gap: var(--space-8);
-  }
 }
 </style>

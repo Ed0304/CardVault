@@ -14,6 +14,10 @@ export const formatDate = (iso?: string | null): string => {
 /** Short, display-only form of a card id, used as a catalog number. */
 export const shortId = (id: string): string => id.slice(0, 8).toUpperCase()
 
+/** A card's heading: its catalog title, else its source title, else "Untitled". */
+export const displayTitle = (card: { catalogTitle?: string | null; sourceTitle?: string | null }): string =>
+  card.catalogTitle?.trim() || card.sourceTitle?.trim() || 'Untitled'
+
 /** Display name of a Muse model id, e.g. "muse-ember-1.0" → "Muse Ember 1.0". */
 export const museModelName = (id: string): string => {
   const match = /^muse-([a-z]+)-(\d+(?:\.\d+)*)$/i.exec(id)

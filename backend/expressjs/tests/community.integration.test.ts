@@ -22,13 +22,14 @@ const PUBLIC_SUMMARY_KEYS = [
   "aiSubjects",
   "aiSummary",
   "author",
+  "catalogTitle",
   "hasSourceText",
   "id",
   "publishedAt",
   "sourceTitle",
   "sourceUrl",
 ];
-const PUBLIC_DETAIL_KEYS = [...PUBLIC_SUMMARY_KEYS, "sourceText", "viewer"].sort();
+const PUBLIC_DETAIL_KEYS = [...PUBLIC_SUMMARY_KEYS, "aiFacts", "aiRelated", "sourceText", "viewer"].sort();
 
 interface CardSpec {
   text?: string;

@@ -10,7 +10,7 @@ AI cataloging is independent of embedding generation. The MVP includes catalogin
 
 | Requirement | Scope |
 |---|---|
-| REQ-AI-001 to REQ-AI-008, REQ-AI-010 to REQ-AI-012, REQ-AI-014 to REQ-AI-016 | **MVP** |
+| REQ-AI-001 to REQ-AI-008, REQ-AI-010 to REQ-AI-012, REQ-AI-014 to REQ-AI-018 | **MVP** |
 | REQ-AI-009 Embedding generation | **Future: Semantic Retrieval milestone** (preserved, not an MVP prerequisite) |
 | REQ-AI-013 Optional image generation | **Optional**, outside the MVP |
 
@@ -43,20 +43,20 @@ The MVP is functional without any AI result: card creation, notes, collections, 
   - AC-AI-001-2: Another user's request for the card returns 404 and makes no AI call.
   - AC-AI-001-3: Two simultaneous requests for one card produce one AI call; the other gets 409.
 
-### REQ-AI-002: AI-Generated Summary
-- The AI service must produce a concise summary of the card's source text.
-- The summary must be factual and derived from the source content.
-- Summary length should be appropriate for display in a card list item (target: 2–4 sentences).
+### REQ-AI-002: Catalog Description
+- The AI service must produce a concise, original catalog description of the card's subject: 1–3 sentences, at most about 60 words.
+- It states what the subject is, why it is significant, and its one or two most defining characteristics. It leaves out trivia, minor dates, lists and plot detail.
+- It is written in the model's own words and does not follow the source's structure (REQ-AI-018). It uses only information in the source.
 
-### REQ-AI-003: AI-Generated Subjects
-- The AI service must return a list of broad subject labels (e.g., "Machine Learning", "Climate Science", "Personal Finance").
-- Subject count: 1–5 labels per card.
-- Subjects are used for filtering and browsing.
+### REQ-AI-003: Library-Style Subject Headings
+- The AI service must return 2–5 specific subject headings (1 is accepted), most specific first, that name the card's actual topic, narrowed to it (for example "Impressionist painting" rather than "Art").
+- Broad categories ("Science", "Popular culture", "Video games") are avoided on their own. When one of the owner's existing headings fits precisely, it is reused exactly.
+- Headings are used for filtering, browsing and search, and are editable by the owner.
 
 ### REQ-AI-004: AI-Generated Keywords
-- The AI service must return a list of specific keywords or phrases extracted from the content.
-- Keyword count: 3–15 per card.
-- Keywords are used for keyword search indexing.
+- The AI service must return 3–12 specific search terms (at most 15 are accepted): names, concepts, methods, places or works central to the source.
+- Keywords do not repeat the catalog title or a subject heading (removed when other keywords remain).
+- Keywords are used for keyword search.
 
 ### REQ-AI-005: Structured Response Validation
 - Express must validate the AI service's JSON response against an expected schema before persisting.
@@ -145,6 +145,27 @@ The MVP is functional without any AI result: card creation, notes, collections, 
 - Acceptance criteria:
   - AC-AI-014-1: FastAPI configuration validation rejects a model identifier that the provider designates as Contributor mode.
   - AC-AI-014-2: No provider credential appears in any Express or Nuxt response, log or client bundle.
+
+### REQ-AI-017: Structured Catalog Entry
+- Besides the description, headings and keywords, the AI service returns:
+  - **title:** the name of the entry's central subject as a catalog heading (for example "Marie Curie"), without site names or taglines; at most 200 characters. When the model gives none, the source title without a trailing " - Site" part is used; when there is no source title either, it is empty and the card keeps showing its source title.
+  - **facts:** up to 8 `{label, value}` pairs that the source states plainly (label ≤ 60, value ≤ 200 characters). Labels are free-text attribute names suited to the subject ("Author", "First published", "Type"). There are no domain-specific fields.
+  - **related:** up to 8 `{name, relation}` pairs for concepts the source explicitly connects to the subject (name ≤ 100, relation ≤ 60 characters), with a short relation label ("Successor", "Created by").
+- Every field may be empty except the description, headings and keywords. The model is told to leave a field out rather than guess.
+- **Grounding checks (FastAPI):** a related concept is kept only if its name appears in the text the model was given; a fact is kept only if its value shares a significant word (3+ letters or a number) with that text; the subject itself, duplicates (case-insensitive), blanks and over-long items are dropped.
+- The owner can edit all of it, including the title. An empty title returns to the source title.
+- Acceptance criteria:
+  - AC-AI-017-1: A related concept not named in the source is not returned.
+  - AC-AI-017-2: A fact whose value has no significant word in the source is not returned.
+  - AC-AI-017-3: An answer without the new fields (an older shape) is still accepted, with empty facts and related concepts.
+
+### REQ-AI-018: Original, Copyright-Safe Catalog Text
+- Catalog text is written in the model's own words. The prompt forbids copying sentences or distinctive phrases and following the source's structure.
+- **Copy check (FastAPI):** a description that repeats 12 or more consecutive words of the source is rejected as invalid output (502; the card is unchanged and the owner can retry).
+- The source text stays in the card's source layer and is published only when the owner explicitly shares it (REQ-CAT-011). The public catalog entry is the owner-reviewed description, facts, headings, keywords and related concepts, plus the source's title and link as attribution.
+- Acceptance criteria:
+  - AC-AI-018-1: A description containing 12 consecutive source words is rejected; one sharing 11 is accepted.
+  - AC-AI-018-2: A published card without shared source text exposes no source text, notes or draft through public endpoints.
 
 ### REQ-AI-015: Draft Privacy and Publication Consent
 - A draft is visible only to the card's owner. It never appears in Community Catalog responses, and saved copies never take it.

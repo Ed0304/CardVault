@@ -56,6 +56,19 @@
 
 - [ ] **TASK-AI-032** Add a Railway service for `backend/fastapi` on the private network (start: `uvicorn app:app --host 0.0.0.0 --port $PORT`) with its variables. Set `AI_SERVICE_URL` and `AI_SERVICE_TOKEN` on the Express service. No public domain for the AI service.
 
+## Richer Catalog Entries (REQ-AI-017, REQ-AI-018)
+
+> Verification: `backend/fastapi` pytest 69 tests (21 new in `tests/test_catalog_entry.py`, fake provider, domain-neutral sample); `backend/expressjs` Jest 241 tests (new `tests/catalogEntry.integration.test.ts`, extended cataloging and community tests) on `cardvault_test`; typecheck; frontend production build. Not verified against a live Meta account: output quality on real sources (for example a Wikipedia article) still needs a manual check (TASK-AI-041).
+
+- [x] **TASK-AI-035** Prompt rewrite: original wording, grounded fields, concise description (≤ 60 words), catalog title, facts, specific headings, keywords that don't repeat the title or headings, grounded related concepts; domain-neutral examples. Strict schema with nested objects.
+- [x] **TASK-AI-036** `normalise()` checks: title fallback from the source title, fact grounding, related-concept grounding (name must appear in the source), duplicate and length limits, copy check (12 consecutive source words rejects the description).
+- [x] **TASK-AI-037** Pydantic `Fact`, `RelatedConcept` and the extended `CatalogResponse`; older answers without the new fields still parse.
+- [x] **TASK-AI-038** `migrations/007_add_catalog_entry_fields.sql` (`catalog_title`, `ai_facts`, `ai_related`; applied twice to `cardvault_test`). Zod schemas for the response and for owner edits; draft mapping; owner and public projections; related-concept links computed on read; search over the new fields; saved copies take them.
+- [x] **TASK-AI-039** Frontend: catalog title as the page heading with the most specific heading in the eyebrow; the catalog entry first (description, facts, headings, keywords, related concepts with links), the original source after it under its own title; editor for the title, facts and related concepts; list items show the catalog title.
+- [x] **TASK-AI-040** Tests listed in the verification note above.
+- [ ] **TASK-AI-041** Manual check on real sources (a Wikipedia article and a non-encyclopedia page) with the deployed model: description length and originality, specific headings, facts and related concepts. Tune the prompt if needed.
+- [ ] **TASK-AI-042** Run migration 007 on the local development database and on Railway before deploying (Railway needs approval).
+
 ## Status Model (done earlier)
 
 - [x] **TASK-AI-018** New cards get `ai_catalog_status` and `ai_embedding_status` `NOT_AVAILABLE`.

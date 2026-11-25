@@ -1,5 +1,17 @@
 <script setup lang="ts">
-const { createCard, createCardFromUrl, isLoading, error } = useCatalog()
+const { createCard, createCardFromUrl, isLoading, error, errorCode } = useCatalog()
+
+/** Failures where the page exists but CardVault can't read it; pasting the text works instead. */
+const UNREADABLE = new Set(['SITE_BLOCKED', 'LOGIN_REQUIRED', 'EXTRACTION_FAILED', 'FETCH_TIMEOUT'])
+const canPasteInstead = computed(() => tab.value === 'url' && !!errorCode.value && UNREADABLE.has(errorCode.value))
+
+/** Switches to "Paste text" and keeps the address as the card's source URL. */
+const pasteInstead = () => {
+  textSourceUrl.value = sourceUrl.value.trim()
+  tab.value = 'text'
+  error.value = null
+  errorCode.value = null
+}
 
 const tab = ref<'text' | 'url'>('text')
 const sourceText = ref('')
@@ -85,7 +97,15 @@ const onSubmit = async () => {
           hint="A public http or https web page. CardVault saves its readable text and details, not the page's HTML. Pages that need a login or JavaScript to show their text can't be read; paste the text instead."
         />
 
-        <CommonAppAlert v-if="error" title="Couldn't save the card">{{ error }}</CommonAppAlert>
+        <CommonAppAlert v-if="error" title="Couldn't save the card">
+          {{ error }}
+          <div v-if="canPasteInstead" class="create__fallback">
+            <CommonAppButton variant="secondary" size="sm" @click="pasteInstead">
+              <CommonAppIcon name="file-text" :size="16" />
+              Paste the text instead
+            </CommonAppButton>
+          </div>
+        </CommonAppAlert>
 
         <div class="create__actions">
           <CommonAppButton type="submit" :loading="isLoading">
@@ -102,7 +122,7 @@ const onSubmit = async () => {
         </div>
         <ol class="create__steps">
           <li>Your original content is saved and kept as is. From a URL, CardVault reads the page's text once.</li>
-          <li>On the card, choose “Catalog with Muse” to get a suggested summary, subjects and keywords.</li>
+          <li>On the card, choose “Catalog with Muse” for a suggested catalog entry: title, description, facts, subject headings, keywords and related concepts.</li>
           <li>You review and edit the suggestions, save them, and add your own notes.</li>
         </ol>
         <p class="create__aside-note">
@@ -123,6 +143,9 @@ const onSubmit = async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+}
+.create__fallback {
+  margin-top: var(--space-3);
 }
 .create__actions {
   display: flex;

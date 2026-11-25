@@ -75,6 +75,7 @@ The original design checked DNS with `dns.lookup` and then fetched. That leaves 
 | `SSRF_BLOCKED`, `REDIRECT_NOT_ALLOWED`, `TOO_MANY_REDIRECTS` | 422 |
 | `FETCH_TIMEOUT`, `FETCH_FAILED`, `RESPONSE_TOO_LARGE` | 422 |
 | `UNSUPPORTED_CONTENT_TYPE`, `EXTRACTION_FAILED` | 422 |
+| `SITE_BLOCKED` (403, 429, 503 from Cloudflare/Akamai/Sucuri/DDoS-Guard, or a 200 challenge page), `LOGIN_REQUIRED` (401, 407) | 422 |
 | `URL_RATE_LIMITED` | 429 |
 
 Every message is written for the user; the frontend shows it as is.

@@ -32,9 +32,12 @@ const received: { authorization: string | undefined; body: Record<string, unknow
 let reply: FakeReply = {};
 
 const goodEntry = (overrides: Record<string, unknown> = {}) => ({
+  title: "Card catalog",
   summary: "Card catalogs organised library collections by author, title and subject.",
+  facts: [{ label: "Type", value: "Library finding aid" }],
   subjects: ["Library Science", "Information Retrieval"],
   keywords: [`catalog-${RUN}`, "subject headings", "Dewey Decimal Classification"],
+  related: [{ name: "Dewey Decimal Classification", relation: "Organising scheme" }],
   model: "muse-ember-1.0",
   truncated: false,
   usage: { input_tokens: 800, output_tokens: 200 },
@@ -143,16 +146,26 @@ describeIntegration("AI cataloging (real database, fake AI service)", () => {
       const card = res.body.data;
       expect(card.aiCatalogStatus).toBe("COMPLETE");
       expect(card.aiCatalogDraft).toMatchObject({
+        catalogTitle: "Card catalog",
         summary: goodEntry().summary,
+        facts: [{ label: "Type", value: "Library finding aid" }],
         subjects: ["Library Science", "Information Retrieval"],
         keywords: goodEntry().keywords,
+        related: [{ name: "Dewey Decimal Classification", relation: "Organising scheme" }],
         model: "muse-ember-1.0",
         truncated: false,
       });
       expect(card.aiCatalogDraft.generatedAt).toEqual(expect.any(String));
       expect(card.aiCatalogDraft).not.toHaveProperty("usage");
       // Nothing is applied until the owner saves it.
-      expect(card).toMatchObject({ aiSummary: null, aiSubjects: [], aiKeywords: [] });
+      expect(card).toMatchObject({
+        catalogTitle: null,
+        aiSummary: null,
+        aiFacts: [],
+        aiSubjects: [],
+        aiKeywords: [],
+        aiRelated: [],
+      });
       expect(card.aiEmbeddingStatus).toBe("NOT_AVAILABLE");
     });
 
@@ -197,6 +210,8 @@ describeIntegration("AI cataloging (real database, fake AI service)", () => {
         aiCatalogDraft: null,
         aiCatalogStatus: "COMPLETE",
       });
+      // Fields the owner did not send stay as they were (not taken from the draft).
+      expect(saved.body.data).toMatchObject({ catalogTitle: null, aiFacts: [], aiRelated: [] });
     });
 
     it("never overwrites the owner's existing catalog details", async () => {
@@ -234,6 +249,67 @@ describeIntegration("AI cataloging (real database, fake AI service)", () => {
       expect(res.body.error.code).toBe("NOTHING_TO_CATALOG");
       expect(received).toHaveLength(0);
       expect((await dbRow(copy.id)).ai_catalog_status).toBe("NOT_AVAILABLE");
+    });
+  });
+
+  describe("structured catalog entries (REQ-AI-017)", () => {
+    it("saves a reviewed entry with its title, facts and related concepts, keeping the source title", async () => {
+      const id = await newCard(alice, `Body ${RUN}`, `Card catalog - Example Encyclopedia ${RUN}`);
+      const draft = (await catalog(alice, id)).body.data.aiCatalogDraft;
+
+      const saved = await as(alice).patch(`/api/cards/${id}/ai-metadata`, {
+        catalogTitle: draft.catalogTitle,
+        aiSummary: draft.summary,
+        aiFacts: draft.facts,
+        aiSubjects: draft.subjects,
+        // Not the draft's keywords: they carry the marker the search test below looks for.
+        aiKeywords: ["card catalog"],
+        aiRelated: draft.related,
+      });
+      expect(saved.status).toBe(200);
+      expect(saved.body.data).toMatchObject({
+        catalogTitle: "Card catalog",
+        sourceTitle: `Card catalog - Example Encyclopedia ${RUN}`,
+        aiFacts: [{ label: "Type", value: "Library finding aid" }],
+        aiRelated: [{ name: "Dewey Decimal Classification", relation: "Organising scheme", cardId: null }],
+        aiCatalogDraft: null,
+      });
+    });
+
+    it("accepts an AI service response without the structured fields (older service)", async () => {
+      const id = await newCard(alice);
+      reply = { body: { ...goodEntry(), title: undefined, facts: undefined, related: undefined } };
+      const draft = (await catalog(alice, id)).body.data.aiCatalogDraft;
+      expect(draft).toMatchObject({ catalogTitle: null, facts: [], related: [] });
+    });
+
+    it.each([
+      ["too many facts", { facts: Array.from({ length: 9 }, (_, i) => ({ label: `L${i}`, value: "v" })) }],
+      ["a fact without a value", { facts: [{ label: "Type", value: "" }] }],
+      ["too many related concepts", { related: Array.from({ length: 9 }, (_, i) => ({ name: `N${i}`, relation: "r" })) }],
+      ["a related concept with an overlong relation", { related: [{ name: "X", relation: "r".repeat(61) }] }],
+      ["an overlong title", { title: "t".repeat(201) }],
+      ["facts that are not a list", { facts: "Type: thing" }],
+    ])("rejects %s from the AI service and stores nothing", async (_label, override) => {
+      const id = await newCard(alice);
+      reply = { body: goodEntry(override) };
+      const res = await catalog(alice, id);
+      expect(res.status).toBe(502);
+      expect(res.body.error.code).toBe("AI_CATALOG_FAILED");
+      expect(await dbRow(id)).toMatchObject({ ai_catalog_status: "FAILED", ai_catalog_draft: null });
+    });
+
+    it("drops unknown keys inside facts and related concepts from the AI service", async () => {
+      const id = await newCard(alice);
+      reply = {
+        body: goodEntry({
+          facts: [{ label: "Type", value: "Aid", html: "<script>x</script>" }],
+          related: [{ name: "Dewey", relation: "Scheme", url: "javascript:alert(1)" }],
+        }),
+      };
+      const draft = (await catalog(alice, id)).body.data.aiCatalogDraft;
+      expect(draft.facts).toEqual([{ label: "Type", value: "Aid" }]);
+      expect(draft.related).toEqual([{ name: "Dewey", relation: "Scheme" }]);
     });
   });
 
@@ -286,6 +362,7 @@ describeIntegration("AI cataloging (real database, fake AI service)", () => {
       ["the summary is missing", { body: goodEntry({ summary: undefined }) }, 502, "AI_CATALOG_FAILED"],
       ["there are too many subjects", { body: goodEntry({ subjects: ["a", "b", "c", "d", "e", "f"] }) }, 502, "AI_CATALOG_FAILED"],
       ["there are no keywords", { body: goodEntry({ keywords: [] }) }, 502, "AI_CATALOG_FAILED"],
+      ["a fact is malformed", { body: goodEntry({ facts: [{ label: "Type" }] }) }, 502, "AI_CATALOG_FAILED"],
     ])("marks the catalog FAILED and keeps the card when %s", async (_label, fake, status, code) => {
       const id = await newCard(alice);
       await as(alice).patch(`/api/cards/${id}/ai-metadata`, { aiSummary: "Existing." });

@@ -24,6 +24,8 @@
 - [x] **TASK-URL-013** Error messages: written for users on the server and shown as is.
 - [x] **TASK-URL-016** `pages/catalog/[id].vue` — labelled source metadata with links, and a truncation notice.
 
+- [x] **TASK-URL-020** Explain refusals (REQ-URL-008a): `LOGIN_REQUIRED`, `SITE_BLOCKED` (403, 429, protected 503, 200 challenge pages), clearer 404; no circumvention. "Paste the text instead" on the create page keeps the URL as the source. Verified by 7 new cases in `tests/urlIngestion.integration.test.ts` (248 backend tests pass), the frontend build, and a live probe: Namu Wiki → `SITE_BLOCKED`; Know Your Meme and Wikipedia saved normally from a home connection.
+
 ## Remaining
 
 - [ ] **TASK-URL-017** Manual browser check of the From URL flow.

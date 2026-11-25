@@ -12,7 +12,7 @@ const steps = [
   {
     number: '02',
     title: 'Catalog',
-    text: 'AI drafts a summary, subjects and keywords. You can review and edit all of it.',
+    text: 'AI drafts a catalog entry: title, description, facts, subject headings and related concepts. You review and edit all of it.',
   },
   {
     number: '03',
@@ -38,7 +38,7 @@ const layers = [
     key: 'ai',
     icon: 'sparkle',
     title: 'AI catalog',
-    text: 'A summary, subjects and keywords. It never overwrites your original or your notes.',
+    text: 'A titled catalog entry in its own words: description, facts, subject headings, keywords and related concepts. It never overwrites your original or your notes.',
   },
 ] as const
 </script>

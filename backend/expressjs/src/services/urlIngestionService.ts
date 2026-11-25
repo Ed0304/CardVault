@@ -120,6 +120,61 @@ type Hop =
   | { kind: "redirect"; location: string }
   | { kind: "page"; body: Buffer; contentType: string };
 
+const PASTE_INSTEAD = "Open the page in your browser and paste its text instead; you can keep the address as the source.";
+
+/** The site shows its content only to signed-in readers. */
+const loginRequired = () =>
+  new AppError(422, "LOGIN_REQUIRED", `This page needs a login, so CardVault can't read it. ${PASTE_INSTEAD}`);
+
+/**
+ * The site's bot protection (for example Cloudflare) refused or challenged the request. CardVault
+ * does not try to get around such protection: it does not pose as a browser or solve challenges.
+ */
+const siteBlocked = () =>
+  new AppError(
+    422,
+    "SITE_BLOCKED",
+    `This site blocks automated access, so CardVault can't read it. ${PASTE_INSTEAD}`,
+  );
+
+/** Bot-protection services that announce themselves in response headers. */
+function protectionService(headers: http.IncomingHttpHeaders): string | null {
+  if (headers["cf-mitigated"] || /cloudflare/i.test(String(headers.server ?? ""))) return "cloudflare";
+  if (headers["x-sucuri-id"]) return "sucuri";
+  if (/akamai/i.test(String(headers.server ?? "")) || headers["x-akamai-transformed"]) return "akamai";
+  if (/ddos-guard/i.test(String(headers.server ?? ""))) return "ddos-guard";
+  return null;
+}
+
+/** Turns a non-200 answer into a clear reason. Logs the status and protection only, never the URL. */
+function refusal(status: number, headers: http.IncomingHttpHeaders): AppError {
+  const protection = protectionService(headers);
+  if (status === 401 || status === 407) return loginRequired();
+  if (status === 403 || status === 429 || (status === 503 && protection)) {
+    console.warn(`[url-ingest] site refused the request: status=${status} protection=${protection ?? "unknown"}`);
+    return siteBlocked();
+  }
+  if (status === 404 || status === 410) {
+    return new AppError(422, "FETCH_FAILED", "That page wasn't found. Check the address and try again.");
+  }
+  return new AppError(422, "FETCH_FAILED", `The page couldn't be saved: it answered with HTTP ${status}.`);
+}
+
+/**
+ * A bot-protection interstitial served with status 200 ("Just a moment…", "Checking your
+ * browser"). Saving it would create a card about the challenge, not the page.
+ */
+const CHALLENGE_MARKERS = [
+  /\/cdn-cgi\/challenge-platform\//i,
+  /<title>\s*(just a moment|attention required|access denied|checking your browser|ddos-guard)/i,
+  /\bcf-chl-|\b_cf_chl_opt\b/i,
+];
+
+function isChallengePage(html: string): boolean {
+  const head = html.slice(0, 20_000);
+  return CHALLENGE_MARKERS.some((marker) => marker.test(head));
+}
+
 function mediaType(contentType: string): string {
   return contentType.split(";")[0]!.trim().toLowerCase();
 }
@@ -214,7 +269,7 @@ function fetchOnce(url: URL, signal: AbortSignal): Promise<Hop> {
         }
         if (status !== 200) {
           res.resume();
-          return reject(new AppError(422, "FETCH_FAILED", `The page couldn't be saved: it answered with HTTP ${status}.`));
+          return reject(refusal(status, res.headers));
         }
         const contentType = res.headers["content-type"] ?? "";
         if (!HTML_TYPES.has(mediaType(contentType))) {
@@ -288,6 +343,10 @@ export async function ingestUrl(rawUrl: string): Promise<IngestedPage> {
     }
 
     const html = decodeHtml(page.body, page.contentType);
+    if (isChallengePage(html)) {
+      console.warn("[url-ingest] site served a bot-protection challenge page");
+      throw siteBlocked();
+    }
     const extracted = extractPage(html, current.href);
     if (extracted.text.replace(/\s/g, "").length < MIN_TEXT_CHARS) {
       throw new AppError(

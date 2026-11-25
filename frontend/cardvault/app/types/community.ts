@@ -1,9 +1,12 @@
+import type { CatalogFact, RelatedConceptLink } from './card'
+
 /**
  * A published card as the Community Catalog shows it. It carries only public fields: never
  * notes, collections, tags or account details other than the author's username.
  */
 export interface PublicCardSummary {
   id: string
+  catalogTitle: string | null
   sourceTitle: string | null
   sourceUrl: string | null
   aiSummary: string | null
@@ -16,6 +19,9 @@ export interface PublicCardSummary {
 }
 
 export interface PublicCard extends PublicCardSummary {
+  aiFacts: CatalogFact[]
+  /** Linked only to other published cards. */
+  aiRelated: RelatedConceptLink[]
   /** The original text, or null when the author did not share it. */
   sourceText: string | null
   viewer: {

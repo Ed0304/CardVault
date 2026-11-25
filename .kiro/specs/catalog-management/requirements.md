@@ -122,7 +122,7 @@ CardVault has three connected experiences: **My Vault** (the user's own cards, p
 
 ### REQ-CAT-013: Save to My Vault (Independent Copy)
 - A signed-in user can save a published card into their vault. This creates a new card owned by the saver. It is never a live reference or shared ownership.
-- The copy takes the title, source URL, source text (only if shared, otherwise empty), summary, subjects and keywords.
+- The copy takes the catalog title, source title, source URL, source text (only if shared, otherwise empty), summary, facts, subjects, keywords and related concepts.
 - The copy records provenance: the original card's id and the original author's username at the time of saving.
 - The copy does not take the original's personal notes, collection, tags, owner, source metadata or AI statuses. Its AI statuses are the initial values for a new card (REQ-AI-012), because it was not processed by AI itself.
 - The copy is `PRIVATE`.
@@ -134,9 +134,16 @@ CardVault has three connected experiences: **My Vault** (the user's own cards, p
   - Edits to the original never change the copy, and edits to the copy never change the original.
   - Unpublishing or deleting the original never deletes or changes the copy.
 
+### REQ-CAT-015: Catalog Entry Identity and Structure
+- A card has a **catalog title** (the name of its subject, for example "Marie Curie") separate from its **source title** (for example "Marie Curie - Wikipedia"). The card is displayed under its catalog title, else its source title, else "Untitled". Existing cards have no catalog title and keep showing their source title.
+- The catalog layer also holds **facts** (up to 8 `{label, value}`) and **related concepts** (up to 8 `{name, relation}`), both general-purpose (AI Cataloging REQ-AI-017). The owner can edit the title, facts and related concepts like the other catalog fields.
+- A related concept links to a card with a matching title (catalog or source title, case-insensitive): in the owner's view only to the owner's own cards, in the public view only to published cards. Without a match it is shown as plain text. Links are worked out on read and never stored.
+- The original source (text, title, URL, metadata) stays a separate layer, shown after the catalog entry under the source's own title, never modified.
+- Keyword search (vault and community) also matches the catalog title, fact labels and values, and related-concept names.
+
 ### REQ-CAT-014: Public Card Detail, Attribution and Field Privacy
 - Any signed-in user can open a published card. A private or unknown card returns the same 404, so private cards are not revealed. The owner gets that 404 too through the public endpoint.
-- Public responses carry only these fields: id, title, source URL, summary, subjects, keywords, whether source text is shared, the source text when shared, the author's username, the publication time, and (detail only) whether the viewer owns the card or already has a copy.
+- Public responses carry only these fields: id, catalog title, source title, source URL, summary, subjects, keywords, whether source text is shared, the source text when shared, the author's username, the publication time, and (detail only) facts, related concepts (linked to published cards only), and whether the viewer owns the card or already has a copy.
 - Public responses never carry personal notes, collections, tags, AI processing statuses, source metadata, owner ids or email addresses. Services select an explicit list of public columns; they never serialize a full card row.
 - A saved copy shows its attribution in the vault (original author, and a link to the original while it is still published). The attribution stays meaningful after the original is unpublished or deleted.
 

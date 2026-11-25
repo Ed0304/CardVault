@@ -31,7 +31,13 @@ const notice = ref<string | null>(null)
 const draft = computed(() => props.card.aiCatalogDraft)
 const hasSourceText = computed(() => props.card.sourceText.trim().length > 0)
 const hasDetails = computed(
-  () => Boolean(props.card.aiSummary) || props.card.aiSubjects.length > 0 || props.card.aiKeywords.length > 0,
+  () =>
+    Boolean(props.card.catalogTitle) ||
+    Boolean(props.card.aiSummary) ||
+    props.card.aiSubjects.length > 0 ||
+    props.card.aiKeywords.length > 0 ||
+    props.card.aiFacts.length > 0 ||
+    props.card.aiRelated.length > 0,
 )
 const modelLabel = computed(() => (draft.value ? museModelName(draft.value.model) : ''))
 
@@ -67,8 +73,10 @@ const onSaveEdit = async (payload: Required<UpdateAiMetadataPayload>) => {
   <AiMetadata
     v-if="!draft && !editing"
     :summary="card.aiSummary"
+    :facts="card.aiFacts"
     :subjects="card.aiSubjects"
     :keywords="card.aiKeywords"
+    :related="card.aiRelated"
     :status="cataloging ? 'PENDING' : card.aiCatalogStatus"
   >
     <CommonAppAlert v-if="notice" variant="success">{{ notice }}</CommonAppAlert>
@@ -90,8 +98,9 @@ const onSaveEdit = async (payload: Required<UpdateAiMetadataPayload>) => {
       </CommonAppButton>
     </div>
     <p v-if="aiAvailable && hasSourceText" class="catalog-hint">
-      Muse reads this card's title and original text, never your notes, and suggests a summary,
-      subjects and keywords for you to review.
+      Muse reads this card's title and original text, never your notes, and drafts a catalog entry
+      in its own words: a title, a short description, facts, subject headings, keywords and related
+      concepts, for you to review.
     </p>
     <p v-else-if="aiAvailable === false" class="catalog-hint">AI cataloging isn't set up on this server.</p>
   </AiMetadata>
@@ -119,9 +128,13 @@ const onSaveEdit = async (payload: Required<UpdateAiMetadataPayload>) => {
 
     <AiMetadataEditor
       :key="draft.generatedAt"
+      :catalog-title="draft.catalogTitle"
+      :source-title="card.sourceTitle"
       :summary="draft.summary"
+      :facts="draft.facts"
       :subjects="draft.subjects"
       :keywords="draft.keywords"
+      :related="draft.related"
       submit-label="Save to card"
       cancel-label="Discard suggestions"
       :loading="isLoading"
@@ -138,8 +151,8 @@ const onSaveEdit = async (payload: Required<UpdateAiMetadataPayload>) => {
     <header class="review__header">
       <span class="review__icon"><CommonAppIcon name="pencil" :size="18" /></span>
       <div>
-        <p class="eyebrow">Layer 3 · your edits</p>
-        <h2 id="edit-heading" class="review__title">Edit catalog details</h2>
+        <p class="eyebrow">Catalog entry · your edits</p>
+        <h2 id="edit-heading" class="review__title">Edit catalog entry</h2>
       </div>
     </header>
     <CommonAppAlert v-if="card.visibility === 'PUBLIC'" variant="warning">
@@ -147,9 +160,13 @@ const onSaveEdit = async (payload: Required<UpdateAiMetadataPayload>) => {
     </CommonAppAlert>
     <CommonAppAlert v-if="error">{{ error }}</CommonAppAlert>
     <AiMetadataEditor
+      :catalog-title="card.catalogTitle"
+      :source-title="card.sourceTitle"
       :summary="card.aiSummary"
+      :facts="card.aiFacts"
       :subjects="card.aiSubjects"
       :keywords="card.aiKeywords"
+      :related="card.aiRelated"
       :loading="isLoading"
       @save="onSaveEdit"
       @cancel="editing = false"

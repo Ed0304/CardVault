@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { uuidSchema } from "../lib/ids.js";
+import { factSchema, LIMITS, relatedConceptSchema } from "./ai.schemas.js";
 
 /** Upper bound on pasted source text (decision D-4, provisional): about 100 KB of text. */
 export const MAX_SOURCE_TEXT_LENGTH = 100_000;
@@ -54,18 +55,33 @@ export const updateNotesSchema = z.object({
 
 const label = z.string().trim().min(1, "must not be empty").max(100, "must be at most 100 characters");
 
-/** User edits to AI metadata. Bounds follow REQ-AI-003/004 as upper limits; edits may remove items. */
+/**
+ * Owner edits to the catalog layer: title, description, facts, headings, keywords and related
+ * concepts (REQ-CAT-006, REQ-AI-017). Bounds are upper limits; edits may remove items. Only the
+ * fields provided change.
+ */
 export const updateAiMetadataSchema = z
   .object({
+    // An empty title means "use the source title" again.
+    catalogTitle: z
+      .string()
+      .trim()
+      .max(LIMITS.title, `must be at most ${LIMITS.title} characters`)
+      .nullable()
+      .optional()
+      .transform((value) => (value === undefined ? undefined : value || null)),
     aiSummary: z.string().trim().max(2_000, "must be at most 2000 characters").nullable().optional(),
+    aiFacts: z.array(factSchema).max(LIMITS.facts, `must have at most ${LIMITS.facts} facts`).optional(),
     aiSubjects: z.array(label).max(5, "must have at most 5 subjects").optional(),
     aiKeywords: z.array(label).max(15, "must have at most 15 keywords").optional(),
+    aiRelated: z
+      .array(relatedConceptSchema)
+      .max(LIMITS.related, `must have at most ${LIMITS.related} related concepts`)
+      .optional(),
   })
-  .refine(
-    (value) =>
-      value.aiSummary !== undefined || value.aiSubjects !== undefined || value.aiKeywords !== undefined,
-    { message: "at least one of aiSummary, aiSubjects or aiKeywords is required" },
-  );
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "at least one catalog field is required",
+  });
 
 /** Page size: default 20 (REQ-CAT-003); maximum 50, matching the search design. */
 export const listCardsQuerySchema = z.object({

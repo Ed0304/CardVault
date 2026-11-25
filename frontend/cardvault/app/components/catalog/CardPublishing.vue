@@ -75,8 +75,8 @@ const onUnpublish = async () => {
       <div>
         <h3 class="publishing__label">Becomes public</h3>
         <ul class="publishing__list">
-          <li>Title and source link</li>
-          <li>Summary, subjects and keywords</li>
+          <li>The catalog title, the source's title and its link</li>
+          <li>The description, facts, subject headings, keywords and related concepts</li>
           <li>Your username, as the author</li>
           <li v-if="hasSourceText && shareSourceText">The original text</li>
         </ul>

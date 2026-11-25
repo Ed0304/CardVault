@@ -19,14 +19,33 @@ export interface SavedFrom {
   originalAvailable: boolean
 }
 
+/** A factual attribute of the card's subject, e.g. { label: 'Author', value: 'Jane Doe' }. */
+export interface CatalogFact {
+  label: string
+  value: string
+}
+
+/** A concept the source connects to the subject, e.g. { name: 'X', relation: 'Successor' }. */
+export interface RelatedConcept {
+  name: string
+  relation: string
+}
+
+/** A related concept as shown, linked when a card with that title exists. */
+export interface RelatedConceptLink extends RelatedConcept {
+  cardId: string | null
+}
+
 /** Fields shown in list views. */
 export interface CardSummary {
   id: string
+  /** The catalog entry's own heading; null means "use the source title". */
+  catalogTitle: string | null
   sourceTitle: string | null
   sourceUrl: string | null
   aiSummary: string | null
   aiSubjects: string[]
-  /** Summary, subjects and keywords. */
+  /** The catalog entry (title, description, facts, headings, keywords, related concepts). */
   aiCatalogStatus: AiStatus
   /** Vector embedding (future Semantic Retrieval milestone; NOT_AVAILABLE in the MVP). */
   aiEmbeddingStatus: AiStatus
@@ -45,6 +64,8 @@ export interface KnowledgeCard extends CardSummary {
   sourceMeta: Record<string, unknown> | null
   notes: string | null
   aiKeywords: string[]
+  aiFacts: CatalogFact[]
+  aiRelated: RelatedConceptLink[]
   /** Whether the public card includes the original text (meaningful while PUBLIC). */
   shareSourceText: boolean
   /** Muse's suggestions awaiting review. Private; nothing changes until the owner saves them. */
@@ -54,9 +75,12 @@ export interface KnowledgeCard extends CardSummary {
 
 /** AI-generated catalog suggestions for one card. */
 export interface CatalogDraft {
+  catalogTitle: string | null
   summary: string
+  facts: CatalogFact[]
   subjects: string[]
   keywords: string[]
+  related: RelatedConcept[]
   /** The Muse model that wrote them, e.g. "muse-ember-1.0". */
   model: string
   /** True when only the first part of a long source text was cataloged. */
@@ -76,9 +100,13 @@ export interface CreateCardPayload {
 }
 
 export interface UpdateAiMetadataPayload {
+  /** Empty or null goes back to showing the source title. */
+  catalogTitle?: string | null
   aiSummary?: string | null
+  aiFacts?: CatalogFact[]
   aiSubjects?: string[]
   aiKeywords?: string[]
+  aiRelated?: RelatedConcept[]
 }
 
 export interface PaginatedResult<T> {

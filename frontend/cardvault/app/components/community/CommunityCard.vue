@@ -23,7 +23,7 @@ const hiddenSubjectCount = computed(() => Math.max(0, props.card.aiSubjects.leng
     <div class="ccard__body">
       <h2 class="ccard__title">
         <NuxtLink :to="`/community/${card.id}`" class="ccard__link">
-          {{ card.sourceTitle ?? 'Untitled' }}
+          {{ displayTitle(card) }}
         </NuxtLink>
       </h2>
 

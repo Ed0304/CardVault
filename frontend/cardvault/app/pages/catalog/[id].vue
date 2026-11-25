@@ -5,6 +5,8 @@ const id = computed(() => String(route.params.id))
 const { card, isLoading, error, fetchCard, deleteCard } = useCatalog()
 
 onMounted(() => fetchCard(id.value))
+// Related-concept links lead from one card to another on the same page component.
+watch(id, (value) => fetchCard(value))
 
 const onDelete = async () => {
   if (!window.confirm('Delete this card permanently?')) return
@@ -34,6 +36,21 @@ const sourceMetaEntries = computed(() => {
   })
 })
 const sourceWasTruncated = computed(() => card.value?.sourceMeta?.truncated === true)
+
+/** The source's own name, e.g. "Jigglypuff - Wikipedia", kept apart from the catalog title. */
+const sourceLabel = computed(() => {
+  const c = card.value
+  if (!c) return ''
+  return c.sourceTitle?.trim() || hostnameOf(c.sourceUrl) || 'Pasted text'
+})
+
+/** Eyebrow above the title: catalog number and the most specific subject heading, if any. */
+const identity = computed(() => {
+  const c = card.value
+  if (!c) return ''
+  const heading = c.aiSubjects[0]
+  return `Catalog entry · No. ${shortId(c.id)}${heading ? ` · ${heading}` : ''}`
+})
 </script>
 
 <template>
@@ -47,7 +64,7 @@ const sourceWasTruncated = computed(() => card.value?.sourceMeta?.truncated === 
     <CommonAppAlert v-else-if="error" title="Couldn't load this card">{{ error }}</CommonAppAlert>
 
     <article v-else-if="card" class="detail">
-      <CommonPageHeading :title="card.sourceTitle ?? 'Untitled'" :eyebrow="`Knowledge card · No. ${shortId(card.id)}`">
+      <CommonPageHeading :title="displayTitle(card)" :eyebrow="identity">
         <template #meta>
           <CommonAppBadge v-if="card.collection" variant="neutral">
             <CommonAppIcon name="folder" :size="12" />
@@ -62,6 +79,10 @@ const sourceWasTruncated = computed(() => card.value?.sourceMeta?.truncated === 
           </CommonAppBadge>
           <span class="mono">
             Saved <time :datetime="card.createdAt">{{ formatDate(card.createdAt) }}</time>
+          </span>
+          <span v-if="card.sourceUrl" class="detail-from">
+            <CommonAppIcon name="link" :size="12" />
+            From <a :href="card.sourceUrl" rel="noopener noreferrer nofollow">{{ hostnameOf(card.sourceUrl) ?? card.sourceUrl }}</a>
           </span>
         </template>
         <template #actions>
@@ -92,13 +113,16 @@ const sourceWasTruncated = computed(() => card.value?.sourceMeta?.truncated === 
 
       <div class="detail__grid">
         <div class="detail__main">
-          <!-- Layer 1: original source -->
+          <!-- The catalog entry: title above, then description, facts, headings, keywords, related. -->
+          <AiCatalogPanel :card="card" />
+
+          <!-- The original source, kept apart from the catalog entry and never modified. -->
           <section class="surface detail-section" aria-labelledby="original-heading">
             <header class="detail-section__header">
               <span class="detail-section__icon"><CommonAppIcon name="file-text" :size="18" /></span>
               <div>
-                <p class="eyebrow">Layer 1 · Never modified</p>
-                <h2 id="original-heading" class="detail-section__title">Original</h2>
+                <p class="eyebrow">Original source · never modified</p>
+                <h2 id="original-heading" class="detail-section__title">{{ sourceLabel }}</h2>
               </div>
             </header>
 
@@ -133,23 +157,21 @@ const sourceWasTruncated = computed(() => card.value?.sourceMeta?.truncated === 
             </p>
           </section>
 
-          <!-- Layer 2: personal notes -->
+        </div>
+
+        <aside class="detail__aside">
+          <!-- Personal notes: private, and never sent to AI or published. -->
           <section class="surface surface--sunken detail-section" aria-labelledby="notes-heading">
             <header class="detail-section__header">
               <span class="detail-section__icon"><CommonAppIcon name="pencil" :size="18" /></span>
               <div>
-                <p class="eyebrow">Layer 2 · Yours</p>
+                <p class="eyebrow">Yours · always private</p>
                 <h2 id="notes-heading" class="detail-section__title">Personal notes</h2>
               </div>
             </header>
             <p v-if="card.notes" class="detail-notes">{{ card.notes }}</p>
             <p v-else class="text-muted">No notes yet.</p>
           </section>
-        </div>
-
-        <!-- Layer 3: AI catalog -->
-        <aside class="detail__aside">
-          <AiCatalogPanel :card="card" />
           <CatalogCardPublishing :card="card" />
         </aside>
       </div>
@@ -190,6 +212,14 @@ const sourceWasTruncated = computed(() => card.value?.sourceMeta?.truncated === 
   color: var(--color-archive-brown);
 }
 .attribution__detail {
+  color: var(--text-secondary);
+}
+
+.detail-from {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 

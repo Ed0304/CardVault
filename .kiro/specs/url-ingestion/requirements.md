@@ -45,6 +45,17 @@ URL ingestion allows users to create a knowledge card by providing a public URL.
 - If the URL is unreachable, returns a non-200 status, or extraction produces no usable text, the card creation must fail with an informative error message.
 - Partial extraction (text retrieved but metadata missing) is acceptable — missing fields default to null.
 
+### REQ-URL-008a: Sites That Refuse Automated Access
+- Many sites sit behind bot protection (for example Cloudflare), which can refuse or challenge CardVault's request. This is more likely from a cloud server than from a home connection. Examples: Namu Wiki returned a Cloudflare 403 block page from a home connection; Know Your Meme served that same connection but may refuse a data-centre address.
+- CardVault does **not** work around such protection: it does not pose as a browser, solve challenges, or rotate addresses. It identifies itself honestly in its User-Agent.
+- Refusals are explained, and no card is created:
+  - 401/407 → 422 `LOGIN_REQUIRED`.
+  - 403, 429, or a 503 from a bot-protection service → 422 `SITE_BLOCKED`.
+  - A challenge page served with 200 ("Just a moment…", `/cdn-cgi/challenge-platform/`) → 422 `SITE_BLOCKED`, so a card is never made from the challenge itself.
+  - 404/410 → 422 `FETCH_FAILED` "That page wasn't found".
+  - Any other status → 422 `FETCH_FAILED` with the status.
+- The messages suggest pasting the text instead. On the create page, a "Paste the text instead" button switches to the text form with the address kept as the source URL (for `SITE_BLOCKED`, `LOGIN_REQUIRED`, `EXTRACTION_FAILED` and `FETCH_TIMEOUT`).
+
 ### REQ-URL-009: Content Type Validation
 - Only HTML content types are supported for text extraction.
 - Non-HTML responses (PDF, images, binary files) must be rejected with a clear error message.

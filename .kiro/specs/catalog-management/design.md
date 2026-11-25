@@ -73,6 +73,10 @@ Notes:
 - `ai_catalog_status` tracks summary, subjects and keywords. `ai_embedding_status` tracks the embedding. They are independent. User edits change neither.
 - Proposed invariant (future milestone): `ai_embedding_status = 'COMPLETE'` if and only if an embedding is stored.
 
+### Catalog entry fields (`007_add_catalog_entry_fields.sql`, REQ-CAT-015)
+
+`catalog_title TEXT` (NULL or 1–200 characters), `ai_facts JSONB` and `ai_related JSONB` (arrays of at most 8, default `[]`). Additive; existing cards keep NULL and empty lists. API fields: `catalogTitle` (summaries and detail), `aiFacts`, `aiRelated` (detail; each related item carries a computed `cardId` or null). `PATCH /api/cards/:id/ai-metadata` accepts `catalogTitle` (empty or null clears it), `aiFacts` and `aiRelated`, and still changes only the fields sent. Design details: AI Cataloging design, "Catalog Entry Structure".
+
 ### Publishing and provenance (`005_add_card_publishing.sql`, REQ-CAT-011 to REQ-CAT-014)
 
 Additive only. Existing cards become `PRIVATE` through the column default.

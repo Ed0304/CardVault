@@ -1,4 +1,4 @@
-import { describeApiError, type ApiErrorMessages } from '~/services/api'
+import { describeApiError, getApiErrorCode, type ApiErrorMessages } from '~/services/api'
 import { catalogService } from '~/services/catalog.service'
 import type {
   CardSummary,
@@ -20,14 +20,18 @@ export const useCatalog = () => {
   const card = useState<KnowledgeCard | null>('catalog:card', () => null)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  /** The API's error code for the last failure, e.g. "SITE_BLOCKED". */
+  const errorCode = ref<string | null>(null)
 
   const run = async <T>(action: () => Promise<T>, messages: ApiErrorMessages): Promise<T | undefined> => {
     isLoading.value = true
     error.value = null
+    errorCode.value = null
     try {
       return await action()
     } catch (e) {
       error.value = describeApiError(e, messages)
+      errorCode.value = getApiErrorCode(e) ?? null
     } finally {
       isLoading.value = false
     }
@@ -157,6 +161,7 @@ export const useCatalog = () => {
     card,
     isLoading,
     error,
+    errorCode,
     fetchCards,
     fetchCard,
     createCard,

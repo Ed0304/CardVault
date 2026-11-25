@@ -49,3 +49,7 @@ Verification for the ticked tasks: `tests/community.integration.test.ts` (28 tes
 - [x] **TASK-CAT-032** `components/catalog/CardPublishing.vue` on `pages/catalog/[id].vue`, with the confirmation step and source-text choice; visibility badge and saved-copy attribution on the card page; Public and Saved badges in `KnowledgeCard.vue`.
 - [x] **TASK-CAT-033** `pages/community/index.vue` and `pages/community/[id].vue` with `components/community/CommunityCard.vue`; "Community" and "My Vault" in the primary navigation.
 - [ ] **TASK-CAT-034** Manual browser check of the publishing confirmation, Save to My Vault and attribution flows (not yet done).
+
+## Catalog Entry Identity and Structure (REQ-CAT-015)
+
+- [x] **TASK-CAT-035** Catalog title separate from the source title (`catalog_title`, migration 007), display fallback, owner editing; facts and related concepts in the catalog layer; related-concept links on read (owner's cards / published cards); search over the new fields; public projection and saved copies updated. Verified by `tests/catalogEntry.integration.test.ts` and the updated community tests on `cardvault_test`. See AI Cataloging TASK-AI-035 to TASK-AI-042.

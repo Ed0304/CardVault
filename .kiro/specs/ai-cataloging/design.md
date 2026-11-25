@@ -90,7 +90,9 @@ The call is synchronous within the owner's request: it is short (a few seconds a
 
 `migrations/006_add_catalog_draft.sql` (additive): `ai_catalog_draft JSONB` (object or NULL) and `ai_catalog_requested_at TIMESTAMPTZ`.
 
-Draft shape: `{ summary, subjects, keywords, model, truncated, generatedAt }`. The draft is private: it appears only in the owner's card detail, never in Community Catalog responses, and saved copies do not take it.
+Draft shape: `{ catalogTitle, summary, facts, subjects, keywords, related, model, truncated, generatedAt }`. Drafts stored before the structured fields existed are read with empty values.
+
+`migrations/007_add_catalog_entry_fields.sql` (additive) adds the saved entry's structured fields: `catalog_title TEXT` (1–200 characters or NULL; NULL shows the source title), `ai_facts JSONB` and `ai_related JSONB` (arrays of at most 8, default `[]`). Related-concept links to other cards are computed on read and never stored: the owner's view links to the owner's cards, the public view to published cards, matching the concept name to a card's catalog or source title (case-insensitive, never the card itself). The draft is private: it appears only in the owner's card detail, never in Community Catalog responses, and saved copies do not take it.
 
 ## Processing Status Model
 
@@ -130,13 +132,52 @@ Request model forbids unknown fields; `text` 1–100,000 characters; at most 50 
 { "summary": "…", "subjects": ["…"], "keywords": ["…"], "model": "muse-ember-1.0",
   "truncated": false, "usage": { "input_tokens": 812, "output_tokens": 240 } }
 ```
+plus `"title": "…" | null`, `"facts": [{ "label", "value" }]` and `"related": [{ "name", "relation" }]` (REQ-AI-017).
 502 `{ "error": { "code": "INVALID_MODEL_OUTPUT" | "PROVIDER_REJECTED" } }`; 503 `PROVIDER_UNAVAILABLE`; 401 without the token; 422 for invalid requests.
 
 `GET /health` → `{ "status": "ok", "catalog_model": "…" }`. No provider call. Interactive docs and `openapi.json` are disabled.
 
+## Catalog Entry Structure (REQ-AI-017, REQ-AI-018)
+
+The model returns one JSON object (strict schema: every object has `additionalProperties: false` and all of its properties required; lists may be empty):
+
+```json
+{
+  "title": "Name of the central subject",
+  "summary": "1–3 original sentences, at most 60 words",
+  "facts":    [{ "label": "Author", "value": "Jane Doe" }],
+  "subjects": ["Most specific heading", "…"],
+  "keywords": ["search term", "…"],
+  "related":  [{ "name": "Concept named in the source", "relation": "Successor" }]
+}
+```
+
+Prompt rules (see `SYSTEM_PROMPT` in `services/llm.py`):
+- Write in the model's own words; never copy a sentence or distinctive phrase; don't follow the source's order.
+- Use only what the source states; leave a field empty rather than guess.
+- Title: the subject's name, no site or publisher names, at most 12 words.
+- Description: what it is, why it matters, one or two defining characteristics; no trivia.
+- Facts: up to 8, general attribute labels suited to the subject; values at most 12 words.
+- Headings: 2–5, most specific first, narrowed to the topic; broad categories avoided on their own; existing headings reused when they fit precisely.
+- Keywords: 3–12, not repeating the title or headings.
+- Related: up to 8 concepts the source explicitly connects, named as the source names them, with a relation of at most 5 words.
+- Examples in the prompt are deliberately domain-neutral (people, science, literature, art).
+
+Normalisation and checks in FastAPI (`normalise()`), against exactly the text the model was given:
+| Field | Check |
+|---|---|
+| title | cleaned; ≤ 200 characters; otherwise the source title without a trailing ` - Site` / ` \| Site` part; otherwise null |
+| summary | whitespace collapsed; clipped to 2,000 characters; **rejected (502) if it repeats 12+ consecutive source words** |
+| facts | label ≤ 60, value ≤ 200, both non-empty; label unique (case-insensitive); value must share a significant word (3+ letters or a number) with the source; at most 8 |
+| subjects | as before: cleaned, unique, ≤ 100 characters, at most 5; at least 1 required |
+| keywords | as before, at most 15; entries equal to the title or a heading removed when others remain; at least 1 required |
+| related | name ≤ 100, relation ≤ 60, both non-empty; the name must appear in the source; not the subject itself; unique; at most 8 |
+
+Express validates the response again with Zod (`catalogServiceResponseSchema`); unknown keys, including inside facts and related items, are dropped. A response without the new fields (an older AI service) is accepted with an empty title, facts and related list.
+
 ## Prompt and Output Handling
 
-- Fixed system prompt (library cataloguer, 2–4 factual sentences, 1–5 Title Case headings reusing existing ones, 3–15 keywords). User content goes only in the user message, inside `<headings>`, `<title>` and `<document>` tags. Any such tag inside user text is neutralised so it cannot close the block (REQ-AI-010).
+- Fixed system prompt as described in "Catalog Entry Structure" above. User content goes only in the user message, inside `<headings>`, `<title>` and `<document>` tags. Any such tag inside user text is neutralised so it cannot close the block (REQ-AI-010).
 - Text over `CATALOG_MAX_INPUT_CHARS` (default 40,000) is cut, the prompt says so, and the draft records `truncated: true` (V-5, D-4).
 - Schema-constrained JSON (`strict: true`, `additionalProperties: false`). Counts and lengths are stated in the prompt and enforced afterwards, so the schema stays within the documented strict subset.
 - Normalisation: whitespace collapsed; empty, over-long (> 100) and case-insensitive duplicate labels dropped; at most 5 subjects and 15 keywords; summary clipped to 2,000 characters at a word boundary. An empty summary, subject list or keyword list, `finish_reason: "length"`, missing content or invalid JSON is a 502.

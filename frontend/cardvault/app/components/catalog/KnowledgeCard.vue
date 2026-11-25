@@ -30,7 +30,7 @@ const hiddenSubjectCount = computed(() => Math.max(0, props.card.aiSubjects.leng
     <div class="kcard__body">
       <h2 class="kcard__title">
         <NuxtLink :to="`/catalog/${card.id}`" class="kcard__link">
-          {{ card.sourceTitle ?? 'Untitled' }}
+          {{ displayTitle(card) }}
         </NuxtLink>
       </h2>
 
