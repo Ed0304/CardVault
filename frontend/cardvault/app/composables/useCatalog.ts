@@ -1,8 +1,16 @@
 import { describeApiError, type ApiErrorMessages } from '~/services/api'
 import { catalogService } from '~/services/catalog.service'
-import type { CardSummary, CreateCardPayload, KnowledgeCard, SetVisibilityPayload } from '~/types/card'
+import type {
+  CardSummary,
+  CreateCardPayload,
+  KnowledgeCard,
+  SetVisibilityPayload,
+  UpdateAiMetadataPayload,
+} from '~/types/card'
 
 export interface CardFilters {
+  /** Keyword search over the user's own cards. */
+  q?: string
   collectionId?: string
   tagId?: string
 }
@@ -100,6 +108,36 @@ export const useCatalog = () => {
       'This card no longer exists. Reload the page and try again.',
     )
 
+  /** Saves the catalog details (and resolves any pending AI suggestion). */
+  const updateAiMetadata = (id: string, payload: UpdateAiMetadataPayload) =>
+    organise(
+      () => catalogService.updateAiMetadata(id, payload),
+      "The catalog details couldn't be saved. Please try again.",
+      'This card no longer exists. Reload the page and try again.',
+    )
+
+  /** Asks Muse for suggestions. On failure the card is reloaded to show its status. */
+  const requestCatalog = async (id: string) => {
+    const updated = await organise(
+      () => catalogService.requestCatalog(id),
+      "Muse couldn't catalog this card. Please try again.",
+      'This card no longer exists. Reload the page and try again.',
+    )
+    if (!updated) {
+      const failedError = error.value
+      await catalogService.get(id).then((fresh) => (card.value = fresh)).catch(() => undefined)
+      error.value = failedError
+    }
+    return updated
+  }
+
+  const discardCatalogDraft = (id: string) =>
+    organise(
+      () => catalogService.discardCatalogDraft(id),
+      "The suggestions couldn't be discarded. Please try again.",
+      'This card no longer exists. Reload the page and try again.',
+    )
+
   const applyTag = (id: string, tagId: string) =>
     organise(
       () => catalogService.addTag(id, tagId),
@@ -126,6 +164,9 @@ export const useCatalog = () => {
     deleteCard,
     setCollection,
     setVisibility,
+    updateAiMetadata,
+    requestCatalog,
+    discardCatalogDraft,
     applyTag,
     removeTag,
   }

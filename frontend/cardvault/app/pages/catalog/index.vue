@@ -1,28 +1,22 @@
 <script setup lang="ts">
-import type { SearchMode } from '~/types/card'
-
 const { cards, isLoading, error, fetchCards } = useCatalog()
-const {
-  results,
-  isFallback,
-  isLoading: isSearching,
-  error: searchError,
-  search,
-} = useSearch()
 
+// Keyword search over your own cards: titles, text, notes and saved catalog details. Semantic
+// search is a future milestone, so the search-mode selector is not shown (D-10).
 const query = ref('')
-const hasSearched = ref(false)
+const activeQuery = ref('')
 
-const visibleCards = computed(() => (hasSearched.value ? results.value : cards.value))
-const loading = computed(() => isLoading.value || isSearching.value)
-const errorMessage = computed(() => error.value ?? searchError.value)
-
-const onSearch = async (q: string, mode: SearchMode) => {
-  hasSearched.value = q.trim().length > 0
-  await search(q, mode)
+const onSearch = async (q: string) => {
+  activeQuery.value = q.trim()
+  await fetchCards({ q: activeQuery.value || undefined })
 }
 
-onMounted(fetchCards)
+const clearSearch = () => {
+  query.value = ''
+  onSearch('')
+}
+
+onMounted(() => fetchCards())
 </script>
 
 <template>
@@ -40,25 +34,44 @@ onMounted(fetchCards)
     </CommonPageHeading>
 
     <div class="stack catalog-page" style="--stack-gap: var(--space-5)">
-      <CatalogSearch v-model="query" @search="onSearch" />
+      <CatalogSearch v-model="query" :show-modes="false" @search="onSearch" />
 
-      <CommonAppAlert v-if="isFallback" variant="info">
-        No semantic results found. Showing keyword matches.
-      </CommonAppAlert>
+      <p v-if="activeQuery && !isLoading && !error" class="catalog-page__summary">
+        Showing cards matching <strong>“{{ activeQuery }}”</strong>.
+        <button type="button" class="catalog-page__clear" @click="clearSearch">Clear search</button>
+      </p>
 
-      <CommonLoadingState v-if="loading" variant="cards" label="Loading your catalog…" />
-      <CommonAppAlert v-else-if="errorMessage" title="Your catalog didn't load">
-        {{ errorMessage }}
+      <CommonLoadingState v-if="isLoading" variant="cards" label="Loading your catalog…" />
+      <CommonAppAlert v-else-if="error" title="Your catalog didn't load">
+        {{ error }}
       </CommonAppAlert>
       <CatalogGrid
         v-else
-        :cards="visibleCards"
-        :empty-title="hasSearched ? 'No matching cards' : undefined"
+        :cards="cards"
+        :empty-title="activeQuery ? 'No matching cards' : undefined"
         :empty-description="
-          hasSearched ? 'Try different words, or switch the search mode.' : undefined
+          activeQuery
+            ? 'Try different words. Search covers titles, text, notes, and saved summaries, subjects and keywords.'
+            : undefined
         "
-        :show-create-action="!hasSearched"
+        :show-create-action="!activeQuery"
       />
     </div>
   </section>
 </template>
+
+<style scoped>
+.catalog-page__summary {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.catalog-page__clear {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+</style>

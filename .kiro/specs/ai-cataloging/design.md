@@ -4,326 +4,202 @@
 
 | Category | Content |
 |---|---|
-| Confirmed architectural decisions | E-1: the hosted AI provider is Meta Model API (Muse family); no second hosted provider is introduced. E-2: Express and PostgreSQL own search and similarity. E-3: two independent processing statuses. Express owns primary database access, FastAPI never accesses PostgreSQL, and the existing `pg` architecture is unchanged. Credentials stay server-side in FastAPI. |
-| MVP scope | Catalog generation with Muse Spark (summary, subjects, keywords). PostgreSQL keyword search. Neither needs embeddings or pgvector. |
-| Future milestone: Semantic Retrieval | Embedding generation (FastAPI, local inference preferred, provider deferred), vector storage with pgvector, semantic similarity search, related-card recommendations. Requirements are preserved; none is an MVP prerequisite. |
-| Currently implemented | Backend: nothing (`backend/fastapi/app.py` is empty; Express has no AI service). Frontend: status labels (`AiProcessingStatus.vue`) and a read-only metadata display (`AiMetadata.vue`) built around a single status. |
-| Unresolved | The items in "Verification Checklist" and "Open Decisions" below. |
-| Known implementation gaps | The frontend uses one `aiStatus` and hides metadata unless it is `COMPLETE`. It calls endpoints that do not exist. There is no polling. |
+| Confirmed architectural decisions | E-1: the hosted AI provider is Meta Model API (Muse family); no second hosted provider. E-2: Express and PostgreSQL own search and similarity. E-3: two independent processing statuses. Express owns all database access; FastAPI never touches PostgreSQL. Credentials stay in FastAPI. |
+| MVP scope (implemented) | Owner-requested catalog generation with **Muse Ember** (`muse-ember-1.0`): summary, subjects and keywords returned as a private **draft** the owner reviews, edits and saves. Vault keyword search over the saved details. |
+| Future milestone: Semantic Retrieval | Embedding generation, pgvector storage, semantic search, related cards. Preserved below; no MVP item depends on it. |
+| Verified against | Meta's official documentation at `dev.meta.ai` (read November 2026). **Not** verified against a live account: no `MODEL_API_KEY` exists for this project yet (see the Verification Checklist). |
 
-## Scope: MVP and Future Milestone
+## Provider: Meta Model API (verified in the official docs)
 
-| Capability | MVP | Future |
-|---|---|---|
-| Catalog generation (summary, subjects, keywords) via Muse Spark | Yes | |
-| Catalog status tracking | Yes | |
-| Embedding status column | Yes, always `NOT_AVAILABLE` | Real values |
-| PostgreSQL keyword search | Yes | |
-| Embedding generation in FastAPI (local inference preferred) | | Yes |
-| pgvector extension and `embedding` column | | Yes |
-| Semantic similarity search, `auto` default mode | | Yes |
-| Related-card recommendations | | Yes |
-| Optional image generation (Muse Image) | Outside the MVP | Optional |
-
-No MVP task depends on a future-milestone item.
-
-## Intended Provider: Meta Model API
-
-Chosen by the project owner. Facts below were read from Meta's published documentation (`dev.meta.ai`) during this documentation pass. They are not verified against a working account and must be re-checked before implementation (see the Verification Checklist).
+Sources: [Models](https://dev.meta.ai/docs/models), [Choose a model](https://dev.meta.ai/docs/choose-a-model), [Muse Ember](https://dev.meta.ai/docs/muse-ember), [Pricing and rate limits](https://dev.meta.ai/docs/pricing-rate-limits), [Structured output](https://dev.meta.ai/docs/structured-output), [Reasoning](https://dev.meta.ai/docs/reasoning), [SDKs](https://dev.meta.ai/docs/sdks), [Error handling](https://dev.meta.ai/docs/cookbook/error-handling-retry), [Geographic use policy](https://dev.meta.ai/legal/geographic-use-policy), [Data commitments](https://dev.meta.ai/legal/commitments).
 
 | Item | Documented value |
 |---|---|
-| Base URL and auth | `https://api.meta.ai/v1`, bearer API key (Meta's examples name it `MODEL_API_KEY`) |
-| API styles | Responses and Chat Completions (OpenAI-compatible), Messages (Anthropic-compatible) |
-| Text and understanding model | `muse-spark-1.3`: inputs text, image, video, audio, PDF; output text; 1,048,576-token context; structured output via JSON schema |
-| Image model | `muse-image-1.0`: inputs text and image; output image; endpoints Responses, `/v1/images/generations`, `/v1/images/edits` |
-| Standard vs Contributor | `muse-spark-1.3` is Standard mode (content not used for training). `muse-spark-1.3-contributor` is cheaper but permits training on content, so it must not be used (REQ-AI-014) |
-| Pricing (pay-as-you-go) | `muse-spark-1.3` Standard: $1.25 per 1M input tokens, $0.15 per 1M cached input, $4.25 per 1M output. `muse-image-1.0`: $0.01 per generated image |
-| Rate limits (per team) | `muse-spark-1.3`: 3,000 requests/min and 4,000,000 tokens/min. `muse-image-1.0`: 150 requests/min. HTTP 429 with `Retry-After`; `x-ratelimit-*` headers |
-| Availability | Public preview; not available in all jurisdictions; the geographic use policy lists restricted territories |
-| Embeddings | No embedding model appears in the published model catalog. Embeddings are therefore not planned from this provider (D-12, deferred) |
+| Base URL and auth | `https://api.meta.ai/v1`, bearer API key. Responses, Chat Completions (OpenAI-compatible) and Messages (Anthropic-compatible) |
+| SDK | No Meta SDK. The official OpenAI SDK works with Meta's base URL; it does not read `MODEL_API_KEY` itself, so the key is passed explicitly |
+| Reasoning models | `muse-wonder-1.0`, `muse-spark-1.3` (also 1.2, 1.1), `muse-ember-1.0`. Same request body; switching is a model id change. Inputs: text, image, video, audio, PDF; output text; 1,048,576-token context |
+| Reasoning effort | `minimal` to `max` (`none` returns 400). Defaults: `max` on Wonder and Ember, `high` on Spark. Reasoning tokens are billed as output |
+| Structured output | `response_format: {type: "json_schema", json_schema: {name, schema, strict}}`. Decoding is constrained to the schema. `strict: true` needs `additionalProperties: false` and every property in `required` |
+| Pricing per 1M tokens (Standard) | Wonder $4.00 in / $20.00 out. Spark $1.25 in / $4.25 out. Ember $0.10 in / $0.50 out up to 200K input tokens per request, $0.30 / $1.50 above |
+| Rate limits (per team) | Wonder, Spark 1.3 and Ember: 3,000 requests/min and 4,000,000 tokens/min each. 429 with `Retry-After`; back off with jitter |
+| Errors | OpenAI-style envelope. Retry 429, 5xx, timeouts and connection errors; never retry 400, 401, 404 |
+| Training and data | Standard mode: content is not used to train Meta models (it may be processed for abuse and safety). Contributor mode (`muse-spark-1.3-contributor`, `-1.2-contributor`) permits training; not allowed here (REQ-AI-014). Zero data retention needs separate enablement by Meta |
+| Availability | Most countries where Meta AI and billing are available. Restricted territories are listed in the geographic use policy; Muse Wonder is additionally unavailable in South Korea. Circumventing geographic controls is prohibited |
+| Embeddings | No embedding model in the catalog. Embeddings stay deferred (D-12) |
+| Hackathon | The Kiroween rules allow third-party SDKs and APIs used in line with their terms |
 
-Provider-specific details appear only in this section, the FastAPI adapters and configuration. Requirements stay provider-neutral where possible.
+## Model Selection
 
-## AI Operations by Model
+| Task | Model | Why |
+|---|---|---|
+| Catalog generation (MVP) | **`muse-ember-1.0`**, reasoning effort `low` | Bounded extraction and classification over text the request supplies: the workload Meta names Ember for. Card text is at most 100,000 characters (about 25–35K tokens), well under Ember's 200K pricing cliff. About 12× cheaper than Spark per card. Default effort is `max`, which would waste tokens, so `low` is set explicitly |
+| Quality fallback | `muse-spark-1.3` | Same request body. Switch with `MUSE_CATALOG_MODEL` if subject headings are too weak in practice |
+| Not used | `muse-wonder-1.0` | Built for long-horizon agentic coding; ~40× Ember's price for no benefit on a short extraction task |
+| Not used | Muse Image, Muse Voice Transcribe, SAM | CardVault cards are text and URLs; PDF, OCR, audio and video are excluded from the MVP |
 
-| Operation | Model | Path | Status |
-|---|---|---|---|
-| Catalog generation (summary, subjects, keywords) | Muse Spark (`muse-spark-1.3`, Standard) with schema-constrained JSON output | Express → FastAPI `POST /catalog` → Meta Model API | **MVP** |
-| Embedding generation | Not selected (D-12). Local inference in FastAPI is the preferred direction | Express → FastAPI `POST /embeddings` | **Future milestone.** Contract documented only |
-| Image understanding | Muse Spark (accepts image input) | None | No current requirement. CardVault excludes PDF, OCR, audio and video processing, and cards are text/URL based. Any use needs a new requirement |
-| Image generation and editing | Muse Image (`muse-image-1.0`) | Express → FastAPI (endpoints not designed) → Meta Model API | OPTIONAL (REQ-AI-013); not designed |
-| Video generation | None | None | Out of scope |
+Estimated cost per catalog request with Ember: 3,000–12,000 input tokens and 500–1,500 output tokens (reasoning included) ≈ $0.0005–$0.002. Spark would be ≈ $0.006–$0.02.
 
-Muse Spark text operations and Muse Image operations are separate: different models, different limits, different pricing, and independent failure. Image requests never touch the two card statuses.
+## AI Opportunity Assessment
 
-## Architecture
+| Opportunity | Decision | Reason |
+|---|---|---|
+| A. Summary, subjects, keywords | **MVP, one call** | One bounded structured call returns all three; separate calls would resend the same input three times |
+| A. Consistent subject headings | **MVP, in the same call** | The owner's existing headings (top 50 by use) are sent so Muse reuses them, like an authority file |
+| A. Catalog category / entities | Future | Collections are the owner's own categories; keywords already capture concepts and names |
+| B. Community enrichment | No new AI | Published cards already expose the owner-reviewed summary, subjects and keywords, and community search uses them. AI never publishes anything itself |
+| C. Keyword search | **MVP, no AI** | PostgreSQL `ILIKE` over the saved details; deterministic, instant, free |
+| C. Query expansion / explanations | Future | Adds a model call to every search; poor value before semantic search exists |
+| C/D. Semantic search, related cards | Future milestone | Needs embeddings (none from this provider), pgvector and storage; not realistic before the deadline |
+| E. Multimodal | No | No image, PDF or audio inputs exist in CardVault |
 
-MVP (catalog generation only):
-
-```
-Express (cardService.createCard)
-    │  returns the saved card to the client without waiting
-    │
-    │  after the insert: POST /catalog  (internal)
-    ▼
-FastAPI /catalog endpoint
-    │
-    │  Muse Spark (muse-spark-1.3, Standard mode) via Meta Model API
-    ▼
-FastAPI returns { summary, subjects, keywords }
-    │
-    ▼
-Express validates response (Zod)
-    │
-    ├── Valid  → UPDATE knowledge_cards SET ai_summary, ai_subjects, ai_keywords, ai_catalog_status='COMPLETE'
-    └── Invalid/Timeout → UPDATE knowledge_cards SET ai_catalog_status='FAILED'
-```
-
-Future milestone (embedding generation, independent of the path above):
+## Architecture (implemented)
 
 ```
-Express  →  FastAPI POST /embeddings  (local inference preferred; not selected)
-Express  ←  { embedding }
-Express  →  UPDATE knowledge_cards SET embedding, ai_embedding_status='COMPLETE'
-            (PostgreSQL + pgvector store the vector; Express runs the similarity queries)
+Nuxt  ──POST /api/cards/:id/catalog──▶  Express (catalogingService)
+                                          1. authenticate; per-user hourly limit
+                                          2. claim: UPDATE … SET ai_catalog_status='PENDING'
+                                             WHERE id AND user_id AND has text AND not already running
+                                          3. read the owner's top subject headings
+                                          4. POST {FASTAPI}/catalog  (Bearer AI_SERVICE_TOKEN, timeout)
+                                                 │
+                                                 ▼
+                                        FastAPI (services/llm.py)
+                                          prompt with delimited content → Muse Ember
+                                          (Chat Completions, json_schema, reasoning_effort=low)
+                                          parse, normalise, validate (Pydantic)
+                                                 │
+                                          5. Zod-validate the response
+                                          6. success: ai_catalog_draft = {...}, status COMPLETE
+                                             failure: status FAILED (nothing else changes)
+Nuxt  ◀── card with aiCatalogDraft ──
+Owner reviews/edits → PATCH /api/cards/:id/ai-metadata (saves, clears the draft)
+                  or → DELETE /api/cards/:id/catalog/draft
 ```
 
-Embedding generation stores its result in the `embedding` pgvector column and updates only `ai_embedding_status`. This design currently documents two endpoints; whether they stay separate at the API level is an open decision (D-7). The two statuses are independent either way.
+The call is synchronous within the owner's request: it is short (a few seconds at low effort), needs no job queue, and the owner is waiting for the result anyway.
 
 ## Responsibility Boundaries
 
 | Component | Owns | Must not |
 |---|---|---|
-| Express | AI orchestration, response validation, all writes to PostgreSQL, search endpoints and queries, authentication, user scoping | Trust a user id from the request body; talk to the AI provider directly; hold provider credentials |
-| PostgreSQL | Card storage and keyword search (MVP); vector storage and similarity ranking via pgvector (future) | n/a |
-| FastAPI | MVP: calling Meta Model API for catalog generation; holding provider credentials. Future: generating embeddings (local inference preferred); optional images | Access PostgreSQL; implement or expose similarity search |
-| Nuxt | UI only | Call FastAPI or the provider; ever see provider credentials |
+| Express | Authorization, rate limiting, the claim, reading the owner's subject headings, validation, all writes | Call the provider; hold provider credentials |
+| FastAPI | Prompt construction, the provider call, retries, output normalisation, the provider key | Access PostgreSQL; accept calls without the service token |
+| Nuxt | Requesting, reviewing, editing, saving or discarding | Call FastAPI or the provider |
 
-## Processing Status Model (proposed)
+## Data Model
 
-Two independent columns per card (names proposed, D-8): `ai_catalog_status` and `ai_embedding_status`.
+`migrations/006_add_catalog_draft.sql` (additive): `ai_catalog_draft JSONB` (object or NULL) and `ai_catalog_requested_at TIMESTAMPTZ`.
 
-| State | Meaning |
+Draft shape: `{ summary, subjects, keywords, model, truncated, generatedAt }`. The draft is private: it appears only in the owner's card detail, never in Community Catalog responses, and saved copies do not take it.
+
+## Processing Status Model
+
+`ai_catalog_status` describes the **latest owner request**:
+
+| Status | Meaning |
 |---|---|
-| `PENDING` | Operation requested, not finished |
-| `COMPLETE` | Operation finished and its result was stored |
-| `FAILED` | Operation attempted, no result stored |
-| `NOT_AVAILABLE` | The operation is not implemented or not enabled, so it was not attempted. Not a processing failure |
+| `NOT_AVAILABLE` | Never requested (every new card), or AI cataloging is not configured |
+| `PENDING` | A request is running. Older than the service timeout + 30 s, it counts as abandoned and a new request may take over (D-1) |
+| `COMPLETE` | The latest request stored a draft. Stays `COMPLETE` after the draft is saved or discarded |
+| `FAILED` | The latest request stored nothing. The card and any earlier draft are unchanged. The owner may retry (D-2) |
 
-MVP values:
+`ai_embedding_status` stays `NOT_AVAILABLE` for every card in the MVP. User edits change neither status.
 
-| Status | MVP values |
-|---|---|
-| `ai_catalog_status` | `PENDING`, `COMPLETE`, `FAILED` when catalog generation is enabled; `NOT_AVAILABLE` when it is not implemented or not enabled |
-| `ai_embedding_status` | `NOT_AVAILABLE` always (embedding generation is a future-milestone feature). Never `FAILED` because of that |
+## API
 
-Illustrative combinations (not a transition specification):
+### Express (public, authenticated, owner only)
 
-| Catalog | Embedding | Meaning |
+| Method | Path | Result |
 |---|---|---|
-| `COMPLETE` | `NOT_AVAILABLE` | MVP: metadata generated; embeddings not implemented |
-| `NOT_AVAILABLE` | `NOT_AVAILABLE` | MVP: catalog generation not enabled; nothing attempted |
-| `COMPLETE` | `COMPLETE` | Future: both operations succeeded |
-| `COMPLETE` | `FAILED` | Future: metadata exists, embedding generation failed |
-| `FAILED` | `COMPLETE` | Future: metadata generation failed, an embedding exists |
-| `PENDING` | `PENDING` | Future: both pending |
+| GET | `/api/ai/status` | `{ catalog: { available } }`. Reveals no configuration |
+| POST | `/api/cards/:id/catalog` | 200 with the card and `aiCatalogDraft`. Errors: 404 `CARD_NOT_FOUND`, 409 `CATALOG_IN_PROGRESS`, 422 `NOTHING_TO_CATALOG`, 429 `AI_RATE_LIMITED` (+`Retry-After`), 502 `AI_CATALOG_FAILED`, 503 `AI_UNAVAILABLE` (+`Retry-After: 30`), 503 `AI_NOT_AVAILABLE` |
+| DELETE | `/api/cards/:id/catalog/draft` | 200 with the card, draft cleared |
+| PATCH | `/api/cards/:id/ai-metadata` | Existing endpoint. Now also clears the draft: saving resolves the suggestion |
+| GET | `/api/cards?q=` | Vault keyword search (D-14): title, source text, notes, summary, subjects, keywords; escaped `ILIKE`; user-scoped |
 
-Proposed invariants:
-- Future milestone: `ai_embedding_status = 'COMPLETE'` if and only if an embedding is stored; the vector and the status are written in one statement.
-- User edits never change either status and never trigger generation.
-- The catalog job writes only catalog columns and its status. The embedding job (future) writes only the embedding and its status.
-- Image generation never changes either status.
+### FastAPI (internal, `Authorization: Bearer <AI_SERVICE_TOKEN>`)
 
-Not decided: transitions out of `FAILED`, `NOT_AVAILABLE` or a stale `PENDING` (D-1, D-2). `NOT_STARTED` is not proposed because it overlaps `PENDING` and `NOT_AVAILABLE`.
-
-## Frontend Representation
-
-- Show summary, subjects and keywords whenever they exist, whatever the statuses are.
-- Show one indicator per operation, so partial success is visible (for example catalog complete, embedding not available). Labels are illustrative.
-- `NOT_AVAILABLE` uses neutral wording ("not available", not "failed") and is never presented as a failure. In the MVP the embedding indicator may be hidden, because it would always say not available. Whether to hide it is a UI choice not specified here.
-- A compact list indicator may summarise the two statuses but must not hide a failure.
-- Polling, if used, continues while either status is `PENDING`, with a limit set by D-1.
-- Generated images (optional) are labelled as AI-generated and shown apart from the original source and notes.
-
-## FastAPI Endpoints
-
-*(Planned. None is implemented.)*
-
-### POST /catalog  (MVP)
-Request:
+`POST /catalog`
 ```json
-{
-  "card_id": "clx...",
-  "text": "Source content to be cataloged..."
-}
+{ "title": "…", "text": "…", "existing_subjects": ["Library Science"] }
 ```
-Response (200):
+Request model forbids unknown fields; `text` 1–100,000 characters; at most 50 headings of ≤ 100 characters.
+
+200:
 ```json
-{
-  "card_id": "clx...",
-  "summary": "Two to four sentence summary of the content.",
-  "subjects": ["Machine Learning", "Neural Networks"],
-  "keywords": ["transformer", "attention mechanism", "fine-tuning"]
-}
+{ "summary": "…", "subjects": ["…"], "keywords": ["…"], "model": "muse-ember-1.0",
+  "truncated": false, "usage": { "input_tokens": 812, "output_tokens": 240 } }
 ```
+502 `{ "error": { "code": "INVALID_MODEL_OUTPUT" | "PROVIDER_REJECTED" } }`; 503 `PROVIDER_UNAVAILABLE`; 401 without the token; 422 for invalid requests.
 
-### POST /embeddings  (future milestone)
-*(Contract only. Embedding provider deferred: D-12. Not an MVP prerequisite.)*
-Request:
-```json
-{
-  "card_id": "clx...",
-  "text": "Source content to embed..."
-}
-```
-Response (200):
-```json
-{
-  "card_id": "clx...",
-  "embedding": [0.021, -0.043, ...]
-}
-```
+`GET /health` → `{ "status": "ok", "catalog_model": "…" }`. No provider call. Interactive docs and `openapi.json` are disabled.
 
-### GET /health  (MVP)
-Response (200):
-```json
-{ "status": "ok", "provider": "<configured provider id>" }
-```
+## Prompt and Output Handling
 
-## Pydantic Models
+- Fixed system prompt (library cataloguer, 2–4 factual sentences, 1–5 Title Case headings reusing existing ones, 3–15 keywords). User content goes only in the user message, inside `<headings>`, `<title>` and `<document>` tags. Any such tag inside user text is neutralised so it cannot close the block (REQ-AI-010).
+- Text over `CATALOG_MAX_INPUT_CHARS` (default 40,000) is cut, the prompt says so, and the draft records `truncated: true` (V-5, D-4).
+- Schema-constrained JSON (`strict: true`, `additionalProperties: false`). Counts and lengths are stated in the prompt and enforced afterwards, so the schema stays within the documented strict subset.
+- Normalisation: whitespace collapsed; empty, over-long (> 100) and case-insensitive duplicate labels dropped; at most 5 subjects and 15 keywords; summary clipped to 2,000 characters at a word boundary. An empty summary, subject list or keyword list, `finish_reason: "length"`, missing content or invalid JSON is a 502.
+- Express validates again with Zod before storing anything (REQ-AI-005).
+- Model output is stored as plain text and rendered with Vue text interpolation; it never controls SQL, routing or other behaviour.
 
-```python
-# models/catalog.py  (MVP)
-class CatalogRequest(BaseModel):
-    card_id: str
-    text: str
+## Failure, Retry and Limits
 
-class CatalogResponse(BaseModel):
-    card_id: str
-    summary: str
-    subjects: list[str] = Field(min_length=1, max_length=5)
-    keywords: list[str] = Field(min_length=1, max_length=15)
+| Layer | Behaviour |
+|---|---|
+| FastAPI → Meta | OpenAI SDK: `MUSE_TIMEOUT_SECONDS` (40) per attempt, `MUSE_MAX_RETRIES` (1) retry with backoff for 429, 5xx, timeouts and connection errors. 401/403 → `PROVIDER_REJECTED` (a 403 can mean the account or region is not enabled); 400/404 → `PROVIDER_REJECTED` |
+| Express → FastAPI | `AI_SERVICE_TIMEOUT_MS` (90,000). Timeout or unreachable → 503 `AI_UNAVAILABLE`; FastAPI 503 → 503; anything else → 502 `AI_CATALOG_FAILED`. Status becomes `FAILED` either way |
+| Concurrency | One running request per card (atomic claim); outcome writes are guarded by the claim's timestamp |
+| Abuse and cost | `AI_CATALOG_HOURLY_LIMIT` (20) requests per user per hour, in memory (one Express instance; resets on restart). Provider limits (3,000 RPM) are far above this |
 
-# models/embeddings.py  (future milestone)
-class EmbeddingRequest(BaseModel):
-    card_id: str
-    text: str
+## Logging
 
-class EmbeddingResponse(BaseModel):
-    card_id: str
-    embedding: list[float]
-```
+FastAPI logs model, input length, truncation, token counts, duration and error class. Express logs outcome, HTTP status and duration. Neither logs card text, prompts, model output, notes, tokens or keys.
 
-## Express AI Service Client
+## Configuration
 
-```typescript
-// src/services/aiService.ts
-async function catalogCard(cardId: string, text: string): Promise<CatalogResult | null>   // MVP
-async function embedCard(cardId: string, text: string): Promise<number[] | null>          // future milestone
-```
+FastAPI (`backend/fastapi/.env.example`): `MODEL_API_KEY`, `MODEL_API_BASE_URL` (https only), `MUSE_CATALOG_MODEL` (Contributor-mode ids rejected), `MUSE_CATALOG_REASONING_EFFORT`, `MUSE_CATALOG_MAX_OUTPUT_TOKENS`, `CATALOG_MAX_INPUT_CHARS`, `MUSE_TIMEOUT_SECONDS`, `MUSE_MAX_RETRIES`, `AI_SERVICE_TOKEN` (≥ 32 characters). Missing or invalid values stop the service at startup.
 
-Both functions catch all exceptions and return `null` on failure — callers must handle null.
+Express (`backend/expressjs/.env.example`): `AI_SERVICE_URL` and `AI_SERVICE_TOKEN` (both or neither; neither = AI cataloging off, D-9), `AI_SERVICE_TIMEOUT_MS`, `AI_CATALOG_HOURLY_LIMIT`.
 
-## Zod Response Validation (Express side)
+## Deployment (not done; needs approval)
 
-```typescript
-// MVP
-const catalogResponseSchema = z.object({
-  card_id: z.string(),
-  summary: z.string().min(1),
-  subjects: z.array(z.string()).min(1).max(5),
-  keywords: z.array(z.string()).min(1).max(15),
-})
-```
-
-Express validates the FastAPI response before writing to the database, even though the provider documents schema-constrained output. The embedding response schema (dimension, finite numbers) belongs to the future milestone.
-
-## Prompt Construction (FastAPI)
-
-The catalog prompt must treat user content as data, not instructions. The provider documents JSON-schema structured output; the schema would carry the same bounds as the models above.
-
-```python
-SYSTEM_PROMPT = """You are a knowledge cataloging assistant.
-Analyze the provided text and return a JSON object with:
-- summary: a 2-4 sentence factual summary
-- subjects: 1-5 broad subject labels
-- keywords: 3-15 specific keywords or phrases
-
-Return only valid JSON. Do not include any other text."""
-
-USER_PROMPT = f"""Catalog the following text:
-
-<content>
-{text}
-</content>"""
-```
-
-The `<content>` delimiters ensure the model treats the text as data rather than instructions.
-
-## Configuration (FastAPI)
-
-Configuration is loaded only from environment variables through `core/config.py` (REQ-AI-008). The MVP must cover the provider credential, the base URL, the text model identifier and timeouts. The image model identifier is needed only for the optional image feature. Embedding settings belong to the future milestone and are not defined. Setting names are not fixed yet (Meta's own examples use `MODEL_API_KEY`). The intended values are `muse-spark-1.3` and `muse-image-1.0`; they are configuration, not code constants.
-
-Rules:
-- The credential lives only in FastAPI's environment. It is never in source, never in `.env.example` with a real value, never returned or logged, and never available to Nuxt or Express.
-- Configuration validation rejects Contributor-mode model identifiers (REQ-AI-014).
-- Do not copy credentials or configuration files from other projects; create the key for this project and never commit it.
-
-## Async Flow in Express
-
-MVP flow when catalog generation is enabled, in `cardService.createCard`:
-1. Insert the card with `ai_catalog_status = 'PENDING'` and `ai_embedding_status = 'NOT_AVAILABLE'`.
-2. Return the card to the route handler (and to the client). Nothing waits for AI work.
-3. After returning, start catalog generation (`aiService.catalogCard`).
-4. Catalog success: update only the catalog fields and set `ai_catalog_status = 'COMPLETE'`. Catalog failure: set only `ai_catalog_status = 'FAILED'`.
-5. AI results must never overwrite user edits (mechanism: D-3).
-
-MVP flow when catalog generation is not implemented or not enabled:
-1. Insert the card with both statuses `NOT_AVAILABLE`.
-2. Return the card. No request is made to FastAPI.
-
-Future milestone: after the insert, Express also starts embedding generation (`aiService.embedCard`) as an independent operation. Success updates only `embedding` and sets `ai_embedding_status = 'COMPLETE'` in the same statement; failure sets only `ai_embedding_status = 'FAILED'`. The initial embedding status then becomes `PENDING` when the feature is enabled.
-
-Card creation is never blocked or failed by AI availability. The execution mechanism, timeouts, stale-`PENDING` recovery and retries are open (D-1, D-2). The provider's documented rate limits and `Retry-After` behaviour inform that work.
+A fourth Railway service for `backend/fastapi` (start: `uvicorn app:app --host 0.0.0.0 --port $PORT`), reachable from Express over Railway's private network only, with its variables set there. Express gets `AI_SERVICE_URL` (private address) and `AI_SERVICE_TOKEN`. Migration 006 must run before the Express deploy.
 
 ## Verification Checklist
 
-Required before the dependent tasks start. "Documented" means read in Meta's docs, not proven with this project's account. "Applies to" says which scope needs the item.
-
-| ID | Item | Applies to | State |
-|---|---|---|---|
-| V-1 | Access and region: the project's account, the developer location and end-user locations are permitted by the geographic use policy; the hackathon rules allow an external AI service | MVP | Open |
-| V-2 | API surface: base URL, bearer auth, Responses vs Chat Completions; choose an OpenAI-compatible SDK or direct HTTP; pin the version | MVP | Documented; client choice open |
-| V-3 | Model identifiers `muse-spark-1.3` (and `muse-image-1.0` if images are pursued) available to the account; deprecation and version-pinning policy | MVP | Documented; open for the account |
-| V-4 | Structured output works on the chosen endpoint with the catalog schema (array bounds, nesting); reasoning-effort setting for cost and latency | MVP | Documented; open |
-| V-5 | Practical input limit per card (context is documented as 1,048,576 tokens) and the truncation policy (feeds D-4) | MVP | Open |
-| V-6 | Embeddings: local-inference approach, model and runtime for FastAPI | **Future milestone** (not an MVP prerequisite) | Deferred (D-12) |
-| V-7 | Pricing: free tier or credits, estimated cost per card, whether reasoning tokens are billed as output, price stability | MVP | Documented rates; rest open |
-| V-8 | Rate limits for this account: documented per-team limits, 429 handling, preview-tier differences | MVP | Documented; open for the account |
-| V-9 | Data handling: retention and zero-data-retention terms for Standard mode; user disclosure (privacy-first) | MVP | Standard mode documented as not used for training; rest open |
-| V-10 | Image generation: response format (URL or base64), sizes, URL expiry, safety filtering, usage rights, provenance marking | Optional | Open |
-| V-11 | Typical latency and the timeout values to use (feeds D-1) | MVP | Open |
-| V-12 | Error codes that separate retryable from permanent failures (feeds D-2) | MVP | Open |
+| ID | Item | State |
+|---|---|---|
+| V-1 | Access and region for this account; hackathon rules | Rules: allowed. Region: the policy lists restricted territories only; **open until a key is created from the developer's location** |
+| V-2 | API surface and client | **Done:** Chat Completions through the OpenAI Python SDK 3.59.0, pinned |
+| V-3 | Model ids available to the account | Documented (`muse-ember-1.0`, `muse-spark-1.3`); open for the account (`GET /v1/models`) |
+| V-4 | Structured output with the catalog schema; reasoning effort | Documented; **open against the live API** (first real request) |
+| V-5 | Input limit | **Done:** 40,000 characters sent (configurable); flagged as truncated |
+| V-6 | Embeddings | Deferred (future) |
+| V-7 | Pricing | **Done** from the official page; per-card estimate above |
+| V-8 | Rate limits | **Done** from the official page; account tier open |
+| V-9 | Data handling | Standard mode not used for training (documented). ZDR not enabled |
+| V-10 | Image generation | Not pursued |
+| V-11 | Latency and timeouts | Timeouts set (40 s per attempt, 90 s overall); real latency **open** |
+| V-12 | Retryable vs permanent errors | **Done** from the official error guide |
 
 ## Open Decisions
 
-Not decided by this document. "Scope" says whether the decision gates MVP work.
-
-| ID | Decision | Scope |
+| ID | Decision | State |
 |---|---|---|
-| E-1 | Resolved in direction: Meta Model API for hosted AI. Remaining work is the MVP items in the Verification Checklist | MVP |
-| D-1 | Stale `PENDING` recovery and timeout policy | MVP |
-| D-2 | Retry for `FAILED`; backfill of `NOT_AVAILABLE` cards | MVP (catalog); future (embeddings) |
-| D-3 | Mechanism preventing AI results from overwriting user edits | MVP |
-| D-4 | Maximum text input length. **Provisional:** 100,000 characters per card (`MAX_SOURCE_TEXT_LENGTH`), with a matching JSON body limit on `/api/cards` only. The limit for text sent to the AI provider is still open (V-5) | MVP |
-| D-5 | Internal Express-to-FastAPI authentication | MVP |
-| D-6 | Embedding dimension and vector schema | Future milestone |
-| D-7 | Whether embedding generation is independent of catalog generation at the API level, including the `card_id` contract for query embeddings | Future milestone |
-| D-8 | **Resolved:** columns `ai_catalog_status` and `ai_embedding_status`, both `TEXT NOT NULL` with a CHECK for `PENDING`, `COMPLETE`, `FAILED`, `NOT_AVAILABLE`, and no database default (`migrations/003_create_catalog_tables.sql`) | MVP |
-| D-9 | **Resolved for now:** the service sets both statuses to `NOT_AVAILABLE` on insert (`initialAiStatuses()` in `cardService.ts`), because no AI integration exists. When catalog generation is implemented, the catalog status becomes `PENDING` while it is enabled. How "enabled" is configured is decided with TASK-AI-013 | MVP |
-| D-10 | MVP search API and UI shape while only keyword search exists: whether `GET /api/search` accepts `mode`, what `semantic` and `auto` do before the milestone, and what the frontend mode selector shows | MVP |
-| D-11 | **Resolved by the project owner:** `auto` (semantic with keyword fallback) is the intended future default search mode. It applies when semantic search exists; the MVP default is covered by D-10 | Future milestone |
-| D-12 | **Deferred:** embedding provider. Local inference in FastAPI is the preferred direction; no model or runtime is selected | Future milestone |
-| D-13 | Optional image feature: whether it is in scope, where generated images are stored (PostgreSQL is the only datastore), and any request status tracking | Optional |
-| D-14 | Relationship between the `q` keyword filter on `GET /api/cards` (REQ-CAT-003) and `GET /api/search`: which is the MVP keyword search, and whether both exist | MVP |
+| D-1 | Stale `PENDING` | **Resolved:** abandoned after the service timeout + 30 s; the next request takes over |
+| D-2 | Retry | **Resolved:** the owner retries manually; FastAPI retries transient errors once. No automatic backfill |
+| D-3 | AI never overwrites user edits | **Resolved:** results are a draft; only the owner's save writes catalog fields |
+| D-4 | Input length | **Resolved:** 100,000 characters stored; 40,000 sent to the model |
+| D-5 | Express → FastAPI auth | **Resolved:** shared bearer token (≥ 32 chars, constant-time comparison) plus a private network |
+| D-9 | How "enabled" is determined | **Resolved:** `AI_SERVICE_URL` and `AI_SERVICE_TOKEN` both set |
+| D-10 | Search mode selector | **Resolved for the MVP:** hidden; keyword search only |
+| D-14 | Vault keyword surface | **Resolved:** `GET /api/cards?q=`. `GET /api/search` is left for semantic search |
+| D-15 | Automatic cataloging on card creation | **Open (future):** needs background jobs and polling; the MVP is owner-requested |
+| D-6, D-7, D-12 | Embeddings | Future milestone |
+| D-13 | Image generation | Optional; not pursued |
+
+## Future Milestone: Semantic Retrieval (preserved)
+
+- FastAPI `POST /embeddings` (`{ text }` → `{ embedding }`), local inference preferred (D-12); Express stores the vector in a pgvector column in the same statement as `ai_embedding_status = 'COMPLETE'`, and runs the similarity queries (see the semantic-search design). Migration numbers: the next free numbers after 006.
+- Storage: one `vector(<N>)` per card (for example 768 floats ≈ 3 KB), an HNSW index, and the pgvector extension, which Railway's PostgreSQL must support (unverified).

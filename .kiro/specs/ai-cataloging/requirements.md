@@ -10,7 +10,7 @@ AI cataloging is independent of embedding generation. The MVP includes catalogin
 
 | Requirement | Scope |
 |---|---|
-| REQ-AI-001 to REQ-AI-008, REQ-AI-010 to REQ-AI-012, REQ-AI-014 | **MVP** |
+| REQ-AI-001 to REQ-AI-008, REQ-AI-010 to REQ-AI-012, REQ-AI-014 to REQ-AI-016 | **MVP** |
 | REQ-AI-009 Embedding generation | **Future: Semantic Retrieval milestone** (preserved, not an MVP prerequisite) |
 | REQ-AI-013 Optional image generation | **Optional**, outside the MVP |
 
@@ -18,24 +18,30 @@ AI cataloging is independent of embedding generation. The MVP includes catalogin
 
 | Aspect | Status |
 |---|---|
-| Hosted AI provider (decision E-1) | **Meta Model API** (Muse family), chosen by the project owner. Muse Spark (`muse-spark-1.3`) generates the MVP catalog metadata. Muse Image (`muse-image-1.0`) is for optional image generation. No second hosted AI provider is introduced. Video generation is not in scope. |
+| Hosted AI provider (decision E-1) | **Meta Model API** (Muse family), chosen by the project owner. **Muse Ember** (`muse-ember-1.0`, Standard mode, low reasoning effort) generates the catalog metadata; `muse-spark-1.3` is the configurable quality fallback. Muse Wonder is not used. Muse Image (`muse-image-1.0`) is for optional image generation, not pursued. No second hosted AI provider is introduced. Video generation is not in scope. |
 | Embeddings | **Deferred (D-12), future milestone.** FastAPI is expected to generate embeddings; local inference is the preferred direction. No embedding model or runtime is selected. It is not an MVP prerequisite. |
 | pgvector | Future milestone only. Not an MVP prerequisite. |
 | Provider facts | Several details are documented but unverified for this project (access, region, limits, pricing). See `design.md` ("Verification Checklist"). |
-| Current implementation | None. `backend/fastapi/app.py` is empty, Express has no AI service, and no card or AI tables exist yet. |
+| Current implementation | Owner-requested catalog generation: FastAPI `POST /catalog` (Muse adapter), Express `POST /api/cards/:id/catalog` with drafts, review UI, and vault keyword search. Tested with a fake provider and a fake AI service; not yet run against a live Meta account (no key exists). |
 
 The MVP is functional without any AI result: card creation, notes, collections, tags and PostgreSQL keyword search all work without cataloging or embeddings. Provider-specific details live in the FastAPI adapters and configuration (REQ-AI-008). Unresolved items are listed in `design.md` ("Open decisions").
 
 ## Requirements
 
-### REQ-AI-001: Automatic Metadata Generation on Card Creation
-- When a knowledge card is created and catalog generation is enabled, Express must automatically trigger AI catalog generation (summary, subjects, keywords).
-- This applies equally to cards created from pasted text and cards created from a URL. URL ingestion itself is separate from AI processing (see the URL Ingestion spec).
-- Card creation must not wait for catalog generation or for embedding generation. The card is saved and returned to the user before any AI processing completes.
+### REQ-AI-001: Owner-Requested Catalog Generation
+- **Changed in the Muse integration milestone:** catalog generation is requested by the card's owner from the card page, not started automatically on creation. Automatic generation is a future option (D-15).
+- Only the card's owner can request it. The request runs while the owner waits and returns the card with Muse's suggestions as a draft (REQ-AI-007).
+- Card creation never waits for or depends on catalog generation, and works whether or not AI is configured.
+- A card with no source text (for example a saved community copy whose author did not share the text) cannot be cataloged: 422 `NOTHING_TO_CATALOG`, and no AI call is made.
+- One request runs per card at a time (409 `CATALOG_IN_PROGRESS`).
 - Catalog generation does not depend on embedding generation, and embedding generation does not depend on catalog generation.
 - Catalog generation and embedding generation are tracked by two independent statuses (REQ-AI-011).
 - In the MVP, no embedding generation is triggered (REQ-AI-009).
-- When catalog generation is not implemented or not enabled, cards are created normally and no AI processing is started (REQ-AI-012).
+- When catalog generation is not configured, the request returns 503 `AI_NOT_AVAILABLE`, no AI call is made, and nothing changes (REQ-AI-012).
+- Acceptance criteria:
+  - AC-AI-001-1: A successful request sets `ai_catalog_status` to `COMPLETE` and stores a draft, and leaves `ai_summary`, `ai_subjects` and `ai_keywords` unchanged.
+  - AC-AI-001-2: Another user's request for the card returns 404 and makes no AI call.
+  - AC-AI-001-3: Two simultaneous requests for one card produce one AI call; the other gets 409.
 
 ### REQ-AI-002: AI-Generated Summary
 - The AI service must produce a concise summary of the card's source text.
@@ -67,12 +73,15 @@ The MVP is functional without any AI result: card creation, notes, collections, 
 - Users can edit the AI-generated summary, subjects, and keywords on any of their cards.
 - User edits do not trigger AI re-generation.
 - Edited values are persisted and displayed in place of the AI-generated originals.
-- AI-generated results must never overwrite user edits. (The mechanism that guarantees this is an open decision: D-3 in `design.md`.)
+- AI-generated results must never overwrite user edits. **Mechanism (D-3, resolved):** Muse's results are stored only as a draft (`ai_catalog_draft`). The draft is labelled as AI-generated, with the model that wrote it. The catalog fields change only when the owner saves (accepting the draft as it is or edited), and saving clears the draft. The owner can also discard it.
 - The user can view and edit AI metadata whatever the card's AI statuses are.
+- Acceptance criteria:
+  - AC-AI-007-1: A card with existing catalog details keeps them unchanged after a successful catalog request.
+  - AC-AI-007-2: Saving catalog details clears the draft; discarding the draft leaves the catalog details unchanged.
 
 ### REQ-AI-008: Configurable AI Provider
 - The AI provider and model for catalog generation must be configurable via environment variables.
-- No specific provider or model identifier is hardcoded in FastAPI source code. The intended provider and model identifiers (Meta Model API; `muse-spark-1.3`, `muse-image-1.0`) are configuration values, not code constants.
+- No specific provider or model identifier is hardcoded in FastAPI source code. The provider base URL and model identifier (`MODEL_API_BASE_URL`, `MUSE_CATALOG_MODEL`, intended value `muse-ember-1.0`) are required configuration values, not code constants.
 - Provider-specific request and response handling is isolated in FastAPI adapters (`services/llm.py`) so that another provider can replace it with configuration and adapter changes only.
 - Express never talks to the AI provider directly; it talks only to FastAPI.
 - No second hosted AI provider is introduced. The embedding model and runtime (future milestone) are not selected here.
@@ -137,9 +146,23 @@ The MVP is functional without any AI result: card creation, notes, collections, 
   - AC-AI-014-1: FastAPI configuration validation rejects a model identifier that the provider designates as Contributor mode.
   - AC-AI-014-2: No provider credential appears in any Express or Nuxt response, log or client bundle.
 
+### REQ-AI-015: Draft Privacy and Publication Consent
+- A draft is visible only to the card's owner. It never appears in Community Catalog responses, and saved copies never take it.
+- AI output never reaches a published card on its own. A published card's public summary, subjects and keywords change only when the owner saves catalog details, and the UI warns that saved details will appear publicly.
+- What is sent to the AI service: the card's title, its source text (cut to `CATALOG_MAX_INPUT_CHARS`), and the owner's own existing subject headings. Personal notes, collections, tags, other users' data and account details are never sent.
+- Acceptance criteria:
+  - AC-AI-015-1: After a catalog request on a published card, the public card detail is unchanged and contains no draft.
+  - AC-AI-015-2: The AI service request body contains exactly `title`, `text` and `existing_subjects`, and no notes.
+
+### REQ-AI-016: Abuse and Cost Protection
+- Each user may make at most `AI_CATALOG_HOURLY_LIMIT` (default 20) catalog requests per hour; beyond that, 429 `AI_RATE_LIMITED` with `Retry-After`.
+- Every call to the AI service has a timeout (`AI_SERVICE_TIMEOUT_MS`), and every provider attempt has one (`MUSE_TIMEOUT_SECONDS`). Transient provider errors are retried at most `MUSE_MAX_RETRIES` times.
+- A temporary failure returns 503 `AI_UNAVAILABLE` with `Retry-After`; any other failure returns 502 `AI_CATALOG_FAILED`. Both set the catalog status to `FAILED` and change nothing else.
+- The AI service accepts requests only with the shared service token.
+
 ## Out of Scope
 
-- Manual AI re-cataloging triggered by the user (post-MVP).
+- Automatic cataloging on card creation (future, D-15).
 - AI-generated card titles (post-MVP).
 - AI-generated related card suggestions at creation time (handled by semantic search, future milestone).
 - Fine-tuning or training custom models.

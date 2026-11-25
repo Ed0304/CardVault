@@ -127,12 +127,7 @@ const sourceMetaEntries = computed(() =>
 
         <!-- Layer 3: AI catalog -->
         <aside class="detail__aside">
-          <AiMetadata
-            :summary="card.aiSummary"
-            :subjects="card.aiSubjects"
-            :keywords="card.aiKeywords"
-            :status="card.aiCatalogStatus"
-          />
+          <AiCatalogPanel :card="card" />
           <CatalogCardPublishing :card="card" />
         </aside>
       </div>

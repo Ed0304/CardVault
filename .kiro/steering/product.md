@@ -78,7 +78,7 @@ Included:
 - Community Catalog: publishing and unpublishing own cards, browsing and keyword-searching published cards, public card detail, and saving independent copies with attribution.
 - Responsive web interface.
 
-The MVP is functional with keyword search alone. AI cataloging (summary, subjects, keywords) uses Meta Model API (Muse Spark) and is independent of search: card creation never waits for it, and keyword search does not need its results.
+The MVP is functional with keyword search alone. AI cataloging works like a librarian's suggestion slip: the owner asks Muse (Meta Model API, Muse Ember) to catalog a card, reviews and edits the suggested summary, subjects and keywords, and saves them. Nothing changes, and nothing is published, until the owner saves. Saved details then make the card findable in keyword search. Card creation never waits for AI.
 
 Planned future milestone: Semantic Retrieval (not part of the MVP; the requirements are preserved):
 - Embedding generation. FastAPI generates embeddings, with local inference as the preferred direction. No embedding model or runtime is selected, and no second hosted AI provider is introduced.

@@ -8,6 +8,8 @@ export class AppError extends Error {
   readonly status: number;
   readonly code: string;
   readonly details: ErrorDetail[] | undefined;
+  /** Sent as the Retry-After header (seconds), for 429 and 503 responses. */
+  retryAfterSeconds: number | undefined;
 
   constructor(
     status: number,

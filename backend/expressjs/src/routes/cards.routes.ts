@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as cardController from "../controllers/cardController.js";
+import * as catalogingController from "../controllers/catalogingController.js";
 import * as tagController from "../controllers/tagController.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { validateBody } from "../middleware/validateBody.js";
@@ -22,6 +23,10 @@ router.get("/:id", cardController.get);
 router.patch("/:id/notes", validateBody(updateNotesSchema), cardController.updateNotes);
 router.patch("/:id/ai-metadata", validateBody(updateAiMetadataSchema), cardController.updateAiMetadata);
 router.delete("/:id", cardController.remove);
+
+// AI cataloging: Muse suggests catalog details as a draft for the owner to review.
+router.post("/:id/catalog", catalogingController.requestCatalog);
+router.delete("/:id/catalog/draft", catalogingController.discardDraft);
 
 // Publishing to the Community Catalog (owner only, like every route here).
 router.patch("/:id/visibility", validateBody(setVisibilitySchema), cardController.setVisibility);

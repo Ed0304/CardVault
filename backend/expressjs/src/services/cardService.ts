@@ -47,7 +47,21 @@ export interface CardDetail extends CardSummary {
   aiKeywords: string[];
   /** Whether the public card includes the source text (only meaningful while PUBLIC). */
   shareSourceText: boolean;
+  /** AI suggestions awaiting the owner's review; never shown on public cards. */
+  aiCatalogDraft: CatalogDraft | null;
   updatedAt: string;
+}
+
+/** A Muse catalog suggestion. It changes nothing on the card until the owner saves it. */
+export interface CatalogDraft {
+  summary: string;
+  subjects: string[];
+  keywords: string[];
+  /** The model that wrote it, shown with the suggestion. */
+  model: string;
+  /** True when only the first part of a long source text was cataloged. */
+  truncated: boolean;
+  generatedAt: string;
 }
 
 export interface CardPage {
@@ -74,6 +88,11 @@ export function deriveTitle(sourceText: string): string {
   return firstLine.length > MAX_DERIVED_TITLE_LENGTH
     ? `${firstLine.slice(0, MAX_DERIVED_TITLE_LENGTH - 1).trimEnd()}…`
     : firstLine;
+}
+
+/** A LIKE pattern that matches `query` literally anywhere (wildcards in it are escaped). */
+export function likePattern(query: string): string {
+  return `%${query.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 }
 
 /** A malformed id can never match a card, so it is treated as "not found". */
@@ -115,7 +134,8 @@ const SUMMARY_COLUMNS = `
   ) AS tags`;
 
 const DETAIL_COLUMNS = `${SUMMARY_COLUMNS},
-  c.source_text, c.source_meta, c.notes, c.ai_keywords, c.share_source_text, c.updated_at`;
+  c.source_text, c.source_meta, c.notes, c.ai_keywords, c.share_source_text, c.ai_catalog_draft,
+  c.updated_at`;
 
 const FROM_CARDS = `
   FROM knowledge_cards c
@@ -143,6 +163,7 @@ interface CardRow {
   notes?: string | null;
   ai_keywords?: string[];
   share_source_text?: boolean;
+  ai_catalog_draft?: CatalogDraft | null;
   updated_at?: Date;
 }
 
@@ -182,6 +203,7 @@ function toDetail(row: CardRow): CardDetail {
     notes: row.notes ?? null,
     aiKeywords: row.ai_keywords ?? [],
     shareSourceText: row.share_source_text ?? false,
+    aiCatalogDraft: row.ai_catalog_draft ?? null,
     updatedAt: (row.updated_at ?? row.created_at).toISOString(),
   };
 }
@@ -233,6 +255,20 @@ export async function listCards(userId: string, query: ListCardsQuery): Promise<
       `EXISTS (SELECT 1 FROM card_tags ct JOIN tags t ON t.id = ct.tag_id AND t.user_id = c.user_id
                 WHERE ct.card_id = c.id AND ct.tag_id = $${params.length})`,
     );
+  }
+  if (query.q) {
+    // Keyword search over the owner's own card: every layer, including the saved catalog
+    // details, so AI cataloging makes cards findable by subject and keyword (D-14).
+    params.push(likePattern(query.q));
+    const p = `$${params.length}`;
+    conditions.push(`(
+      c.source_title ILIKE ${p} ESCAPE '\\'
+      OR c.source_text ILIKE ${p} ESCAPE '\\'
+      OR c.notes ILIKE ${p} ESCAPE '\\'
+      OR c.ai_summary ILIKE ${p} ESCAPE '\\'
+      OR array_to_string(c.ai_subjects, ' ') ILIKE ${p} ESCAPE '\\'
+      OR array_to_string(c.ai_keywords, ' ') ILIKE ${p} ESCAPE '\\'
+    )`);
   }
   const where = `WHERE ${conditions.join(" AND ")}`;
 
@@ -298,9 +334,11 @@ export async function updateAiMetadata(
     sets.push(`ai_keywords = $${params.length}`);
   }
 
+  // Saving catalog details resolves any pending AI suggestion: the owner has either accepted it
+  // (with their edits) or written their own. The draft never overrides this save.
   params.push(cardId, userId);
   const result = await pool.query(
-    `UPDATE knowledge_cards SET ${sets.join(", ")}, updated_at = now()
+    `UPDATE knowledge_cards SET ${sets.join(", ")}, ai_catalog_draft = NULL, updated_at = now()
       WHERE id = $${params.length - 1} AND user_id = $${params.length}`,
     params,
   );

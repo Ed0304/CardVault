@@ -1,59 +1,72 @@
 # AI Cataloging — Tasks
 
-> **Status: NO TASK IS COMPLETE.** The hosted AI provider is Meta Model API (decision E-1). Provider facts are documented in `design.md` but not verified against a working account.
-> **MVP vs future:** every task is MVP unless tagged `[FUTURE]` or `[OPTIONAL]`. No MVP task depends on a `[FUTURE]` task, on pgvector, or on any embedding work. The MVP is complete without them.
-> Tags: `[READY]` can start now. `[READY AFTER V-n / TASK-…]` can start once the named verification item or task is done. `[BLOCKED: …]` waits for the named decision. `[FUTURE]` belongs to the Semantic Retrieval milestone. `[OPTIONAL]` is outside the core scope. `[INDEPENDENT]` does not depend on the AI provider.
-> Verification items V-1 to V-12 and decisions D-1 to D-14 are defined in `design.md`.
+> **Milestone: Muse integration (owner-requested cataloging).** Verification for ticked tasks: `backend/fastapi` pytest (36 tests, fake provider), `backend/expressjs` Jest (143 tests, 29 for cataloging, isolated `cardvault_test` database and a fake AI service), backend typecheck, the frontend production build, and an end-to-end run through the Nuxt proxy, Express, FastAPI and the real `api.meta.ai` endpoint with an invalid key (rejected with 401, handled as `FAILED`).
+> **Not yet verified:** a successful call to Meta Model API. No project API key exists. See TASK-AI-020.
+> Tags: `[FUTURE]` belongs to the Semantic Retrieval milestone. `[OPTIONAL]` is outside the core scope. V-n and D-n are defined in `design.md`.
 
 ## MVP completion criteria
 
-The MVP AI work is complete when all of the following hold:
-- TASK-AI-020, 001, 002, 003, 005, 007, 008, 010, 011, 012, 022 (FastAPI catalog service), TASK-AI-013, 014, 015 (Express) and TASK-AI-016, 017, 018, 019 (frontend and status handling) are done.
-- Creating a card returns without waiting for catalog generation, and a failed or unavailable catalog generation never fails card creation.
-- A card gets catalog metadata from Muse Spark and `ai_catalog_status` follows `PENDING` to `COMPLETE` or `FAILED`; with generation not enabled the status is `NOT_AVAILABLE` and no outbound request is made.
-- `ai_embedding_status` is `NOT_AVAILABLE` for every card, no embedding request is made, and no card is marked `FAILED` because embeddings are deferred.
-- Keyword search works with no embeddings, no pgvector and no FastAPI running.
+- An owner can request cataloging of a card, receive Muse's summary, subjects and keywords as a labelled draft, edit them, and save them to the card, or discard them.
+- AI output never changes a card's catalog details, or a published card, without the owner's save.
+- Failures, timeouts, bad output and missing configuration leave the card unchanged and set the status the user sees.
+- Saved details make cards findable through vault keyword search (and community search, when published).
+- `ai_embedding_status` stays `NOT_AVAILABLE`; no embedding request is made.
 
-## Verification (no code)
+## Verification
 
-- [ ] **[READY]** **TASK-AI-020** Work through the MVP items of the Verification Checklist in `design.md` (V-1 to V-5, V-7 to V-9, V-11, V-12; V-10 only if images are pursued) against a real Meta Model API account, and record the results in `design.md`. Create a project-specific API key; do not reuse files or keys from another project.
+- [ ] **TASK-AI-020** Create a project-specific Meta Model API key from the developer's location (do not reuse another project's key), then:
+  - Run `GET /v1/models` and confirm `muse-ember-1.0` is listed (V-3).
+  - Make one real catalog request and confirm the structured output is accepted with `strict: true` (V-4).
+  - Record real latency and token counts from the FastAPI log (V-11, V-7).
+  - Check the subject headings on 5–10 real cards. If they are weak, switch `MUSE_CATALOG_MODEL` to `muse-spark-1.3`.
+- [x] **TASK-AI-024** Research the current Muse models, structured output, reasoning effort, pricing, limits, errors, data handling, availability and hackathon rules in official sources, and record them in `design.md`.
 
-## FastAPI Backend (MVP)
+## FastAPI Backend
 
-- [ ] **[READY AFTER V-2]** **TASK-AI-001** Create `backend/fastapi/requirements.txt` — add `fastapi`, `uvicorn`, `pydantic`, `pydantic-settings`, and the HTTP client or SDK chosen in V-2. No embedding or inference libraries.
-- [ ] **[READY AFTER V-2]** **TASK-AI-002** Create `backend/fastapi/core/config.py` — `Settings` class using `pydantic-settings`. Provider credential, base URL, text model identifier and timeouts come from environment variables; setting names are provisional (`AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_SECONDS`). Embedding settings are not part of the MVP.
-- [ ] **[READY]** **TASK-AI-003** Create `backend/fastapi/models/catalog.py` — `CatalogRequest` and `CatalogResponse` Pydantic models.
-- [ ] **[READY AFTER V-2, V-4]** **TASK-AI-005** Create `backend/fastapi/services/llm.py` — LLM client adapter for Muse Spark; reads provider settings from config; implements `generate_catalog(text: str) -> CatalogResponse`. Provider-specific code stays in this adapter.
-- [ ] **[READY AFTER V-4]** **TASK-AI-007** Implement prompt construction in `llm.py` — wrap user content in `<content>` delimiters to prevent prompt injection; use the provider's schema-constrained output; parse and validate the JSON response.
-- [ ] **[READY AFTER TASK-AI-005]** **TASK-AI-008** Create `backend/fastapi/routers/catalog.py` — `POST /catalog` endpoint using `CatalogRequest` / `CatalogResponse`; call `llm.generate_catalog`.
-- [ ] **[READY AFTER TASK-AI-002]** **TASK-AI-010** Create `backend/fastapi/routers/health.py` — `GET /health` endpoint returning status and configured provider name.
-- [ ] **[READY; CORS and authentication wording depends on D-5]** **TASK-AI-011** Update `backend/fastapi/app.py` — create FastAPI app instance, include the catalog and health routers, configure CORS to allow Express backend origin only. The embeddings router is not included until the future milestone.
-- [ ] **[READY AFTER V-2]** **TASK-AI-012** Create `backend/fastapi/.env.example` documenting the provider settings (placeholders only, no real values) and `FASTAPI_PORT`. Names provisional.
-- [ ] **[READY AFTER TASK-AI-002]** **TASK-AI-022** Add configuration validation in `core/config.py` that rejects Contributor-mode model identifiers (REQ-AI-014).
+- [x] **TASK-AI-001** `backend/fastapi/requirements.txt` (pinned: fastapi, uvicorn, pydantic, pydantic-settings, openai) and `requirements-dev.txt` (pytest, httpx).
+- [x] **TASK-AI-002** `core/config.py` — settings from the environment only. Fails fast on missing values; https-only base URL; service token at least 32 characters; secrets never in `repr`.
+- [x] **TASK-AI-022** Configuration rejects Contributor-mode model ids (REQ-AI-014).
+- [x] **TASK-AI-003** `models/catalog.py` — `CatalogRequest` (title, text, existing subject headings; unknown fields forbidden) and `CatalogResponse`.
+- [x] **TASK-AI-005** `services/llm.py` — Muse adapter (OpenAI SDK, Chat Completions, `json_schema` strict, reasoning effort from config, timeout and retries). Classifies provider errors into unavailable, rejected and invalid output.
+- [x] **TASK-AI-007** Prompt construction with delimited user content and neutralised delimiter tags; input truncation; output normalisation and validation.
+- [x] **TASK-AI-008** `routers/catalog.py` — `POST /catalog` behind the service token; stable error codes only.
+- [x] **TASK-AI-010** `routers/health.py` — `GET /health`, no provider call.
+- [x] **TASK-AI-011** `app.py` — app, lifespan (fail-fast settings, one shared client), routers; no CORS and no interactive docs (internal service).
+- [x] **TASK-AI-012** `backend/fastapi/.env.example` and `.gitignore`.
+- [x] **TASK-AI-025** `tests/test_catalog.py` — success, request shape, prompt-injection delimiters, truncation, normalisation, eight malformed-output cases, eight provider error classes, service-token checks, request validation, health, settings validation.
 
-## Express Backend (MVP)
+## Express Backend
 
-- [ ] **[READY AFTER TASK-AI-008; timeout value D-1]** **TASK-AI-013** Create `src/services/aiService.ts` — implement `catalogCard(cardId, text)`; use `FASTAPI_URL` from env (added to `src/lib/config.ts` and `.env.example`); return `null` on any failure; apply request timeout. `embedCard` is not part of this task (see TASK-AI-023).
-- [ ] **[READY]** **TASK-AI-014** Add Zod schema for validating the FastAPI catalog response in `src/schemas/ai.schemas.ts`.
-- [ ] **[BLOCKED in part: D-1, D-3; depends on TASK-CAT-007, TASK-AI-013]** **TASK-AI-015** Update `src/services/cardService.ts` — when catalog generation is enabled, start `aiService.catalogCard` after the insert without making `createCard` wait; update `ai_catalog_status` from the outcome. Do not start any embedding operation.
+- [x] **TASK-AI-013** `src/services/aiService.ts` — FastAPI client with bearer token and timeout; outcomes returned as values, never thrown. `AI_SERVICE_URL`, `AI_SERVICE_TOKEN`, `AI_SERVICE_TIMEOUT_MS`, `AI_CATALOG_HOURLY_LIMIT` in `src/lib/config.ts` and `.env.example`.
+- [x] **TASK-AI-014** `src/schemas/ai.schemas.ts` — Zod validation of the FastAPI response.
+- [x] **TASK-AI-026** `migrations/006_add_catalog_draft.sql` — `ai_catalog_draft`, `ai_catalog_requested_at` (applied twice to `cardvault_test`).
+- [x] **TASK-AI-015** `src/services/catalogingService.ts` — owner check, per-user hourly limit, atomic claim with stale-request takeover, existing subject headings, draft storage, `FAILED` on any failure; `discardDraft`. Routes `POST /api/cards/:id/catalog`, `DELETE /api/cards/:id/catalog/draft`, `GET /api/ai/status`. Saving AI metadata clears the draft.
+- [x] **TASK-AI-027** Vault keyword search: `q` on `GET /api/cards` over title, source text, notes and saved catalog details (D-14).
+- [x] **TASK-AI-028** `tests/cataloging.integration.test.ts` — 29 tests: authentication, availability, draft storage, request body and privacy, accept and discard, no overwrite, no source text, cross-user, public-card privacy, seven failure modes, timeout, unreachable service, retry, concurrency, stale takeover, rate limit, search.
+- [ ] **TASK-AI-029** Run `npm run migrate` on the local development database and on Railway (Railway needs approval). Required before deploying the Express changes.
 
-## Frontend (MVP)
+## Frontend
 
-- [ ] **[INDEPENDENT]** **TASK-AI-016** Create `app/components/ai/AiMetadataEditor.vue` (beside the existing read-only `AiMetadata.vue`) — show a status indicator per operation: a "Processing…" state for `PENDING`, a failure notice for `FAILED`, and neutral wording for `NOT_AVAILABLE`. Always show metadata that exists, whatever the statuses are.
-- [ ] **[READY AFTER TASK-AI-015; limit D-1]** **TASK-AI-017** Update `app/pages/catalog/[id].vue` — poll `GET /api/cards/:id` every 3 seconds while either status is `PENDING`, stop when neither is `PENDING`.
+- [x] **TASK-AI-016** `components/ai/AiCatalogPanel.vue` and `components/ai/AiMetadataEditor.vue` — Catalog with Muse, a draft review labelled with the model, save or discard, manual editing, warnings for published and truncated cards, loading and error states. `AiProcessingStatus.vue` labels updated for owner-requested cataloging.
+- [x] **TASK-AI-030** `pages/catalog/index.vue` — vault keyword search through `GET /api/cards?q=`; the mode selector is hidden (D-10).
+- [ ] **TASK-AI-017** Polling while `PENDING` — not needed for the synchronous MVP flow (the request returns the result). Needed only if automatic cataloging (D-15) is added.
+- [ ] **TASK-AI-031** Manual browser check of the catalog, review, save, discard and search flows (not yet done).
 
-## Status Model and Unavailable-Operation Handling (MVP, independent of the AI provider)
+## Deployment (needs approval)
 
-- [x] **[INDEPENDENT; D-8, D-9 resolved]** **TASK-AI-018** In `cardService.createCard`, set `ai_embedding_status` to `NOT_AVAILABLE` for every card. Set `ai_catalog_status` to `PENDING` when catalog generation is enabled and to `NOT_AVAILABLE` when it is not implemented or not enabled; make no AI call in the latter case. Depends on TASK-CAT-002 and TASK-CAT-007.
-- [x] **[INDEPENDENT; D-8 resolved]** **TASK-AI-019** Update the frontend types and components that use a single `aiStatus` (`types/card.ts`, `components/ai/AiProcessingStatus.vue`, `components/ai/AiMetadata.vue`, `components/catalog/KnowledgeCard.vue`, `pages/catalog/[id].vue`) to use the two statuses and to show metadata whenever it exists.
+- [ ] **TASK-AI-032** Add a Railway service for `backend/fastapi` on the private network (start: `uvicorn app:app --host 0.0.0.0 --port $PORT`) with its variables. Set `AI_SERVICE_URL` and `AI_SERVICE_TOKEN` on the Express service. No public domain for the AI service.
 
-## Future Milestone: Semantic Retrieval (not an MVP prerequisite)
+## Status Model (done earlier)
 
-- [ ] **[FUTURE; needs D-7, D-12]** **TASK-AI-004** Create `backend/fastapi/models/embeddings.py` — `EmbeddingRequest` and `EmbeddingResponse` Pydantic models.
-- [ ] **[FUTURE; needs D-12]** **TASK-AI-006** Create `backend/fastapi/services/embedder.py` — embedding generation in FastAPI (local inference is the preferred direction; no model or runtime is selected); implements `generate_embedding(text: str) -> list[float]`.
-- [ ] **[FUTURE; needs D-12]** **TASK-AI-009** Create `backend/fastapi/routers/embeddings.py` — `POST /embeddings` endpoint; call `embedder.generate_embedding`; include it in `app.py`.
-- [ ] **[FUTURE; needs D-6, D-7, D-12; depends on TASK-CAT-001, TASK-CAT-024, TASK-AI-009]** **TASK-AI-023** Add `embedCard(cardId, text)` to `src/services/aiService.ts`, an embedding response schema in `src/schemas/ai.schemas.ts` (including dimension checks), and an independent embedding operation started after the card insert in `cardService.ts`. It updates only `embedding` and `ai_embedding_status`, and never delays card creation.
+- [x] **TASK-AI-018** New cards get `ai_catalog_status` and `ai_embedding_status` `NOT_AVAILABLE`.
+- [x] **TASK-AI-019** Frontend uses the two statuses and shows metadata whenever it exists.
 
-## Optional Image Generation (not core; needs a product decision)
+## Future
 
-- [ ] **[OPTIONAL; BLOCKED: D-13, V-10]** **TASK-AI-021** Design and implement optional image generation and editing with Muse Image (REQ-AI-013): FastAPI image adapter and endpoints, Express endpoints, storage of generated images, and the UI. Not designed yet. Video generation is out of scope.
+- [ ] **[FUTURE: D-15]** **TASK-AI-033** Automatic cataloging after card creation (background job, polling, backfill).
+- [ ] **[FUTURE]** **TASK-AI-034** Suggest one of the owner's collections for a card.
+- [ ] **[FUTURE; needs D-7, D-12]** **TASK-AI-004** `models/embeddings.py`.
+- [ ] **[FUTURE; needs D-12]** **TASK-AI-006** `services/embedder.py` (local inference preferred).
+- [ ] **[FUTURE; needs D-12]** **TASK-AI-009** `routers/embeddings.py`.
+- [ ] **[FUTURE; needs D-6, D-7, D-12]** **TASK-AI-023** `embedCard` in `aiService.ts`, embedding validation, and an independent embedding operation.
+- [ ] **[OPTIONAL; BLOCKED: D-13, V-10]** **TASK-AI-021** Optional image generation with Muse Image.

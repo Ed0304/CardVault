@@ -7,6 +7,7 @@ import {
   cardNotFound,
   getCard,
   initialAiStatuses,
+  likePattern,
   type CardDetail,
 } from "./cardService.js";
 
@@ -95,11 +96,6 @@ function toPublicSummary(row: PublicRow): PublicCardSummary {
     author: { username: row.author_username },
     publishedAt: row.published_at.toISOString(),
   };
-}
-
-/** Escapes LIKE wildcards so user input matches literally. */
-function likePattern(query: string): string {
-  return `%${query.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 }
 
 /**

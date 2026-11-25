@@ -92,7 +92,7 @@ backend/expressjs/
 
 ## FastAPI Backend — `backend/fastapi/` (planned; intended provider: Meta Model API)
 
-Currently only an empty `app.py` exists. The layout below is the planned structure. The MVP needs only catalog generation and health (`routers/catalog.py`, `routers/health.py`, `services/llm.py`). The embedding files belong to the future Semantic Retrieval milestone. Provider-specific code stays in `services/` and `core/config.py`. Optional image operations (Muse Image) are not designed yet and have no router or model here. FastAPI contains no similarity search and no database access; vector similarity is Express + PostgreSQL.
+Catalog generation and health are implemented (also `core/security.py` for the service token, `tests/`, `requirements-dev.txt`, `.env.example`); the embedding files are still planned. The MVP needs only catalog generation and health (`routers/catalog.py`, `routers/health.py`, `services/llm.py`). The embedding files belong to the future Semantic Retrieval milestone. Provider-specific code stays in `services/` and `core/config.py`. Optional image operations (Muse Image) are not designed yet and have no router or model here. FastAPI contains no similarity search and no database access; vector similarity is Express + PostgreSQL.
 
 ```
 backend/fastapi/
@@ -109,7 +109,7 @@ backend/fastapi/
 │   └── embedder.py                # Embedding generation, local inference preferred (future milestone; not selected)
 ├── core/
 │   └── config.py                  # Settings loaded from environment variables
-└── requirements.txt               # Python dependencies (to be created)
+└── requirements.txt               # Python dependencies (pinned)
 ```
 
 ## Naming Conventions

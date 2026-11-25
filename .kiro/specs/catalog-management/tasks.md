@@ -24,14 +24,14 @@
 
 ## Frontend
 
-- [ ] **TASK-CAT-014** Extend the existing `app/composables/useCatalog.ts` (it already exposes `cards`, `card`, `fetchCards`, `fetchCard`, `createCard`, `createCardFromUrl`, `deleteCard`) — add `updateNotes` and `updateAiMetadata`. The earlier spec name `useCards.ts` is not used.
+- [ ] **TASK-CAT-014** (Partial: `updateAiMetadata` added; `updateNotes` remains.) Extend the existing `app/composables/useCatalog.ts` (it already exposes `cards`, `card`, `fetchCards`, `fetchCard`, `createCard`, `createCardFromUrl`, `deleteCard`) — add `updateNotes` and `updateAiMetadata`. The earlier spec name `useCards.ts` is not used.
 - [ ] **TASK-CAT-015** Create `app/composables/useCollections.ts` — expose `collections`, `fetchCollections`, `createCollection`, `renameCollection`, `deleteCollection`.
 - [ ] **TASK-CAT-016** Create `app/composables/useTags.ts` — expose `tags`, `fetchTags`, `createTag`, `deleteTag`, `applyTag`, `removeTag`.
 - [ ] **TASK-CAT-017** Verify and extend the existing `app/components/catalog/KnowledgeCard.vue` (the card list item; it already renders title, source host, summary, subjects, tags, collection and createdAt) so it shows the two AI statuses (TASK-AI-019). The earlier spec name `CardItem.vue` is not used.
-- [ ] **TASK-CAT-018** Create `app/components/ai/AiMetadataEditor.vue` (beside the existing read-only `AiMetadata.vue`) — editable fields for aiSummary, aiSubjects, aiKeywords with a status badge for each of the two AI statuses (PENDING / COMPLETE / FAILED / NOT_AVAILABLE). Shows metadata whenever it exists.
+- [x] **TASK-CAT-018** (Done in the Muse milestone, with `AiCatalogPanel.vue` showing the status; verified by the production build only.) Create `app/components/ai/AiMetadataEditor.vue` (beside the existing read-only `AiMetadata.vue`) — editable fields for aiSummary, aiSubjects, aiKeywords with a status badge for each of the two AI statuses (PENDING / COMPLETE / FAILED / NOT_AVAILABLE). Shows metadata whenever it exists.
 - [ ] **TASK-CAT-019** Create `app/components/catalog/NotesEditor.vue` — auto-saving textarea for personal notes.
 - [ ] **TASK-CAT-020** Create `app/components/common/ConfirmDialog.vue` (generic UI primitives live in `components/common/`; there is no `ui/` folder) — modal dialog with confirm/cancel props and emits. The card detail page currently uses `window.confirm`.
-- [ ] **TASK-CAT-021** Extend the existing `app/pages/catalog/index.vue` (the card list page; `app/pages/index.vue` is the landing page) — card list with pagination, filter sidebar (by collection and tag), and search input. The list and search input exist; pagination and the filter sidebar do not.
+- [ ] **TASK-CAT-021** Extend the existing `app/pages/catalog/index.vue` (the card list page; `app/pages/index.vue` is the landing page) — card list with pagination, filter sidebar (by collection and tag), and search input. The list and the keyword search (`GET /api/cards?q=`, done in the Muse milestone) exist; pagination and the filter sidebar do not.
 - [ ] **TASK-CAT-022** Extend the existing `app/pages/catalog/create.vue` — tabbed form for "Paste Text" and "From URL" card creation. The tabs exist in the scaffold; they are not connected to a working backend.
 - [ ] **TASK-CAT-023** Extend the existing `app/pages/catalog/[id].vue` — three-panel card detail: source content (read-only), notes editor, AI metadata editor with delete button using `ConfirmDialog`.
 

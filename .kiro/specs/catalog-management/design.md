@@ -229,11 +229,11 @@ These are the only fields. The integration tests assert the exact key sets.
 ## Service Layer
 
 `cardService.ts` responsibilities:
-- `createCard(userId, input)` — insert the card with its initial AI statuses and return without waiting for any AI work. The catalog status is `PENDING` when catalog generation is enabled and `NOT_AVAILABLE` when it is not implemented or not enabled (mechanism D-9). The embedding status is `NOT_AVAILABLE` throughout the MVP. When catalog generation is enabled, start it via `aiService` after the insert (TASK-AI-015). Embedding generation is future-milestone work.
-- `getCards(userId, filters, pagination)` — scoped list query.
+- `createCard(userId, input)` — insert the card with both AI statuses `NOT_AVAILABLE` and return. No AI work starts; cataloging is requested by the owner later (`catalogingService.requestCatalog`, AI Cataloging design).
+- `listCards(userId, query)` — scoped list query, with optional `collectionId`, `tagId` and keyword `q` (escaped `ILIKE` over title, source text, notes, summary, subjects and keywords; D-14).
 - `getCard(userId, cardId)` — scoped detail query; throw 404 if not found or wrong user.
 - `updateNotes(userId, cardId, notes)` — scoped update of `notes` field only.
-- `updateAiMetadata(userId, cardId, patch)` — scoped update of `aiSummary`, `aiSubjects`, `aiKeywords`. Does not change either AI status and does not trigger generation. AI results must never overwrite these edits (mechanism D-3).
+- `updateAiMetadata(userId, cardId, patch)` — scoped update of `aiSummary`, `aiSubjects`, `aiKeywords`. Does not change either AI status and does not trigger generation. Also clears any pending AI draft. AI results are only ever stored as that draft, so they never overwrite these edits (D-3).
 - `deleteCard(userId, cardId)` — scoped delete.
 
 - `setCollection(userId, cardId, { collectionId })` — the collection's ownership is checked inside the same `UPDATE`.

@@ -47,7 +47,21 @@ export interface KnowledgeCard extends CardSummary {
   aiKeywords: string[]
   /** Whether the public card includes the original text (meaningful while PUBLIC). */
   shareSourceText: boolean
+  /** Muse's suggestions awaiting review. Private; nothing changes until the owner saves them. */
+  aiCatalogDraft: CatalogDraft | null
   updatedAt: string
+}
+
+/** AI-generated catalog suggestions for one card. */
+export interface CatalogDraft {
+  summary: string
+  subjects: string[]
+  keywords: string[]
+  /** The Muse model that wrote them, e.g. "muse-ember-1.0". */
+  model: string
+  /** True when only the first part of a long source text was cataloged. */
+  truncated: boolean
+  generatedAt: string
 }
 
 /** Publishing always states whether the original text is shared; unpublishing needs nothing. */
@@ -62,7 +76,7 @@ export interface CreateCardPayload {
 }
 
 export interface UpdateAiMetadataPayload {
-  aiSummary?: string
+  aiSummary?: string | null
   aiSubjects?: string[]
   aiKeywords?: string[]
 }

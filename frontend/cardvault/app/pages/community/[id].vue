@@ -89,7 +89,12 @@ const onSave = async () => {
         </section>
 
         <aside>
-          <AiMetadata :summary="card.aiSummary" :subjects="card.aiSubjects" :keywords="card.aiKeywords" />
+          <AiMetadata
+            eyebrow="Catalog entry · published by the author"
+            :summary="card.aiSummary"
+            :subjects="card.aiSubjects"
+            :keywords="card.aiKeywords"
+          />
         </aside>
       </div>
     </article>

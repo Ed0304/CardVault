@@ -10,16 +10,17 @@ withDefaults(
   { compact: false },
 )
 
+// The status describes the latest AI cataloging request, which the owner starts.
 const labels: Record<AiStatus, string> = {
-  PENDING: 'AI cataloging in progress…',
-  COMPLETE: 'AI cataloging complete',
-  FAILED: 'AI cataloging failed. Your original content is safe.',
-  NOT_AVAILABLE: 'AI cataloging is not available yet. You can add catalog details yourself.',
+  PENDING: 'Muse is cataloging this card…',
+  COMPLETE: 'Cataloged with Muse',
+  FAILED: 'The last AI cataloging attempt failed. Your card is unchanged.',
+  NOT_AVAILABLE: 'Not cataloged by AI yet. You can add catalog details yourself.',
 }
 
 const compactLabels: Record<AiStatus, string> = {
   PENDING: 'Cataloging',
-  COMPLETE: 'Cataloged',
+  COMPLETE: 'AI cataloged',
   FAILED: 'AI failed',
   NOT_AVAILABLE: 'Not cataloged',
 }

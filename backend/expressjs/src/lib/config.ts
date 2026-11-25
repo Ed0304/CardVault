@@ -7,7 +7,21 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32, "must be at least 32 characters"),
   JWT_ISSUER: z.string().min(1).default("cardvault-api"),
   JWT_AUDIENCE: z.string().min(1).default("cardvault-web"),
-});
+  // Internal AI service (FastAPI). AI cataloging is enabled only when both are set (D-9).
+  AI_SERVICE_URL: z
+    .string()
+    .url("must be a URL such as http://localhost:8000")
+    .refine((value) => /^https?:\/\//.test(value), "must be an http or https URL")
+    .optional(),
+  AI_SERVICE_TOKEN: z.string().min(32, "must be at least 32 characters").optional(),
+  // Covers the provider call and its retry inside FastAPI.
+  AI_SERVICE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(90_000),
+  // Catalog requests per user per hour (abuse and cost protection).
+  AI_CATALOG_HOURLY_LIMIT: z.coerce.number().int().min(1).max(1_000).default(20),
+}).refine(
+  (env) => Boolean(env.AI_SERVICE_URL) === Boolean(env.AI_SERVICE_TOKEN),
+  { message: "set both or neither", path: ["AI_SERVICE_URL"] },
+);
 
 const parsed = envSchema.safeParse(process.env);
 
@@ -40,5 +54,12 @@ export const config = {
      * race (two tabs refreshing at once), not as theft.
      */
     reuseGraceSeconds: 30,
+  },
+  ai: {
+    /** Base URL of the internal AI service, or null when AI cataloging is not enabled. */
+    serviceUrl: parsed.data.AI_SERVICE_URL?.replace(/\/+$/, "") ?? null,
+    serviceToken: parsed.data.AI_SERVICE_TOKEN ?? null,
+    timeoutMs: parsed.data.AI_SERVICE_TIMEOUT_MS,
+    catalogHourlyLimit: parsed.data.AI_CATALOG_HOURLY_LIMIT,
   },
 } as const;

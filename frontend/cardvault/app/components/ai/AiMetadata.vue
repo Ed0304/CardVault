@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import type { AiStatus } from '~/types/card'
 
-const props = defineProps<{
-  summary: string | null
-  subjects: string[]
-  keywords: string[]
-  /**
-   * Catalog-generation status. Metadata is shown whenever it exists, whatever this is. Omitted
-   * on public cards, which do not expose processing statuses.
-   */
-  status?: AiStatus
-}>()
+const props = withDefaults(
+  defineProps<{
+    summary: string | null
+    subjects: string[]
+    keywords: string[]
+    /**
+     * Catalog-generation status. Metadata is shown whenever it exists, whatever this is. Omitted
+     * on public cards, which do not expose processing statuses.
+     */
+    status?: AiStatus
+    eyebrow?: string
+  }>(),
+  { status: undefined, eyebrow: 'Layer 3 · AI-assisted, edited by you' },
+)
 
 const hasMetadata = computed(
   () => Boolean(props.summary) || props.subjects.length > 0 || props.keywords.length > 0,
@@ -22,8 +26,8 @@ const hasMetadata = computed(
     <div class="ai-metadata__header">
       <span class="ai-metadata__icon"><CommonAppIcon name="sparkle" :size="18" /></span>
       <div>
-        <p class="eyebrow">AI-generated</p>
-        <h2 id="ai-metadata-heading" class="ai-metadata__title">AI catalog</h2>
+        <p class="eyebrow">{{ eyebrow }}</p>
+        <h2 id="ai-metadata-heading" class="ai-metadata__title">Catalog details</h2>
       </div>
     </div>
 
@@ -51,6 +55,8 @@ const hasMetadata = computed(
         </ul>
       </div>
     </div>
+
+    <div v-if="$slots.default" class="ai-metadata__extra"><slot /></div>
   </section>
 </template>
 
@@ -102,5 +108,12 @@ const hasMetadata = computed(
   flex-wrap: wrap;
   gap: var(--space-2);
   list-style: none;
+}
+.ai-metadata__extra {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) dashed var(--border-ai);
 }
 </style>

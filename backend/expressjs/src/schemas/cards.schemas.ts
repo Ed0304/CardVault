@@ -60,6 +60,13 @@ export const updateAiMetadataSchema = z
 
 /** Page size: default 20 (REQ-CAT-003); maximum 50, matching the search design. */
 export const listCardsQuerySchema = z.object({
+  // Keyword search within the user's own cards (REQ-CAT-003, D-14).
+  q: z
+    .string()
+    .trim()
+    .max(500, "must be at most 500 characters")
+    .optional()
+    .transform((value) => (value ? value : undefined)),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(20),
   collectionId: uuidSchema.optional(),

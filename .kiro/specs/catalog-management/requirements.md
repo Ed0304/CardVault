@@ -12,8 +12,7 @@ Catalog management covers creating, reading, updating, and deleting knowledge ca
 - An optional source URL may be provided at creation time.
 - Title defaults to the first line of the content if not provided explicitly.
 - Creating a card and processing its AI metadata are separate steps. Card creation saves the card and returns it without waiting for any AI operation, and it succeeds whether or not an AI integration is available or working.
-- AI cataloging (catalog generation and embedding generation) is an intended capability of CardVault. It runs after the card is saved, asynchronously, and is tracked by two independent statuses (`ai_catalog_status` and `ai_embedding_status`). The initial values are defined in REQ-AI-001 and REQ-AI-012 of the AI Cataloging spec.
-- Until the runtime AI integration is operational, new cards are saved without AI metadata (REQ-AI-012). It is not operational today: nothing is implemented yet.
+- AI cataloging is requested by the owner after the card is saved (AI Cataloging REQ-AI-001) and is tracked by two independent statuses (`ai_catalog_status` and `ai_embedding_status`). New cards are saved without AI metadata, with both statuses `NOT_AVAILABLE` (REQ-AI-012).
 - A failure of either AI operation never causes card creation to fail or roll back.
 - Acceptance criteria:
   - AC-CAT-001-1: A create-from-text request returns the saved card, with its original text, without waiting for any AI operation to finish.

@@ -9,7 +9,7 @@ import type {
 import { apiFetch } from './api'
 
 export const catalogService = {
-  list: (query: { page?: number; pageSize?: number; collectionId?: string; tagId?: string } = {}) =>
+  list: (query: { q?: string; page?: number; pageSize?: number; collectionId?: string; tagId?: string } = {}) =>
     apiFetch<PaginatedResult<CardSummary>>('/cards', { query }),
 
   get: (id: string) => apiFetch<KnowledgeCard>(`/cards/${id}`),
@@ -35,6 +35,14 @@ export const catalogService = {
   /** Publishes the card to the Community Catalog, or makes it private again. */
   setVisibility: (id: string, payload: SetVisibilityPayload) =>
     apiFetch<KnowledgeCard>(`/cards/${id}/visibility`, { method: 'PATCH', body: { ...payload } }),
+
+  /** Asks Muse for catalog suggestions. They come back as a draft on the card. */
+  requestCatalog: (id: string) => apiFetch<KnowledgeCard>(`/cards/${id}/catalog`, { method: 'POST' }),
+
+  discardCatalogDraft: (id: string) =>
+    apiFetch<KnowledgeCard>(`/cards/${id}/catalog/draft`, { method: 'DELETE' }),
+
+  aiStatus: () => apiFetch<{ catalog: { available: boolean } }>('/ai/status'),
 
   addTag: (id: string, tagId: string) =>
     apiFetch<KnowledgeCard>(`/cards/${id}/tags/${tagId}`, { method: 'POST' }),

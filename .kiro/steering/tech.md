@@ -11,7 +11,7 @@ inclusion: always
 | Frontend | Nuxt 4, Vue 3.5, TypeScript, Tailwind CSS |
 | Main Backend | Node.js, Express.js v5, TypeScript, Zod, `pg` (node-postgres) with parameterized SQL |
 | Authentication | JWT (HS256, `jsonwebtoken`) in an HttpOnly cookie; Argon2id password hashing (`argon2`) |
-| AI Backend | Python, FastAPI (planned) calling Meta Model API (intended provider; see Architecture Decision 10) |
+| AI Backend | Python 3.13, FastAPI, pydantic-settings, OpenAI Python SDK calling Meta Model API (see Architecture Decision 10) |
 | Database | PostgreSQL (the pgvector extension is added in the future Semantic Retrieval milestone, not the MVP) |
 
 ## Service Responsibilities
@@ -37,14 +37,15 @@ inclusion: always
 ### AI Backend — `backend/fastapi/`
 - FastAPI with Python.
 - Internal service only — not exposed to the public internet.
-- MVP responsibilities: catalog generation (summary, subjects, keywords) with Muse Spark, and AI health checks. Optional image generation and editing with Muse Image is outside the MVP.
+- MVP responsibilities: catalog generation (summary, subjects, keywords) with Muse Ember, and health checks. Optional image generation and editing with Muse Image is outside the MVP.
+- Accepts requests only with the shared service token; no CORS and no interactive docs.
 - Future Semantic Retrieval milestone: embedding generation. Local inference in FastAPI is the preferred direction; no embedding model or runtime is selected, and no second hosted AI provider is introduced.
 - Is the only service that calls Meta Model API and the only one that holds its credentials. Credentials are server-side environment variables and are never exposed to Nuxt.
 - Does not implement or expose similarity search. Vector similarity is performed by PostgreSQL (pgvector) and orchestrated by Express.
 - Does not read or write the main application database directly.
 - Receives text from Express, returns structured AI results.
 - AI provider must remain configurable — provider and model identifiers are configuration values, not code constants, and provider-specific code stays in the FastAPI adapters.
-- Current state: `app.py` is empty. Nothing above is implemented.
+- Current state: catalog generation and health are implemented and tested with a fake provider. Not yet deployed or run against a live account.
 
 ## Architecture Decisions
 
@@ -57,7 +58,7 @@ inclusion: always
 7. Express accesses PostgreSQL with raw SQL through the `pg` pool. Prisma is not used.
 8. Authentication uses a short-lived access JWT (15 minutes, HttpOnly `cv_token` cookie) and a rotating opaque refresh token (HttpOnly `cv_refresh` cookie, `migrations/004_create_refresh_tokens.sql`). Only the refresh token's SHA-256 hash is stored. A login lasts up to 7 days without use and 30 days at most; reuse of a rotated token after a 30-second grace period revokes the whole login. Logout revokes the login's refresh tokens and clears both cookies. An already-issued access token stays valid until it expires; there is no access-token denylist.
 9. Search is owned by Express and PostgreSQL. The MVP search is PostgreSQL keyword search and needs no embeddings, pgvector or AI service. In the future Semantic Retrieval milestone, Express runs the similarity queries and PostgreSQL (pgvector) stores vectors and computes and ranks similarity. FastAPI has no database access, no similarity-search implementation and no similarity endpoint. FastAPI may only generate embeddings (future). The intended default search mode for the future milestone is `auto` (semantic search with keyword fallback); decision D-11 is resolved in that direction.
-10. The intended runtime AI provider is Meta Model API (Muse family), chosen by the project owner. Muse Spark (`muse-spark-1.3`, Standard mode) handles cataloging, summaries, keyword extraction, reasoning and image understanding. Muse Image (`muse-image-1.0`) handles optional image generation and editing. Video generation is out of scope. FastAPI calls the provider; Express never does. No second hosted AI provider is introduced. The embedding provider is deferred to the future Semantic Retrieval milestone, with local inference in FastAPI as the preferred direction (Meta's published model catalog lists no embedding model). Embedding model and runtime selection are not MVP prerequisites. Provider facts are documented but unverified for this project; see the ai-cataloging design. Kiro's development-time AI is not a runtime dependency.
+10. The runtime AI provider is Meta Model API (Muse family), chosen by the project owner. Catalog generation uses **Muse Ember** (`muse-ember-1.0`, Standard mode, reasoning effort `low`) through the OpenAI-compatible Chat Completions API with JSON-schema structured output; `muse-spark-1.3` is the configurable quality fallback and Muse Wonder is not used. Model ids are configuration (`MUSE_CATALOG_MODEL`), and Contributor-mode ids are rejected. Muse Image (`muse-image-1.0`) is for optional image generation, not pursued. Video generation is out of scope. FastAPI calls the provider; Express never does. No second hosted AI provider is introduced. The embedding provider is deferred to the future Semantic Retrieval milestone, with local inference in FastAPI as the preferred direction (Meta's model catalog lists no embedding model). Provider facts are verified against Meta's documentation but not yet against a live account; see the ai-cataloging design. Kiro's development-time AI is not a runtime dependency.
 11. AI processing has two independent statuses per card: catalog generation (summary, subjects, keywords) and embedding generation. Each can be `PENDING`, `COMPLETE`, `FAILED` or `NOT_AVAILABLE` (not implemented or not enabled). In the MVP the embedding status is `NOT_AVAILABLE`, which is not a processing failure. (The state set is proposed; see the ai-cataloging design.)
 12. Community Catalog (catalog-management REQ-CAT-011 to REQ-CAT-014): cards carry a `visibility` of `PRIVATE` (default) or `PUBLIC`. The `/api/community` endpoints require a signed-in user, read only `PUBLIC` cards, and select an explicit list of public columns in `communityService.ts`; they never serialize a full card row. Saving a published card creates an independent copy owned by the saver, in one transaction, with provenance columns on the copy and no foreign key to the original.
 
@@ -88,7 +89,7 @@ inclusion: always
 
 ## AI Integration Strategy
 
-- MVP: after a card is saved, Express sends its text to FastAPI for catalog generation (`{ summary, subjects, keywords }`). Card creation never waits for it.
+- MVP: the card's owner requests cataloging (`POST /api/cards/:id/catalog`). Express sends the title, source text and the owner's existing subject headings to FastAPI (`POST /catalog`, bearer `AI_SERVICE_TOKEN`), and stores the validated `{ summary, subjects, keywords }` as a private draft (`ai_catalog_draft`). The catalog fields change only when the owner saves; saving clears the draft. Card creation never waits for or depends on AI. Notes, collections and tags are never sent.
 - Future Semantic Retrieval milestone: Express also asks FastAPI for an embedding (`{ embedding }`). Embedding generation is independent of catalog generation, and card creation never waits for it either. Whether the two are one request or two at the API level is an open decision. Their outcomes are always recorded independently.
 - When catalog generation is not implemented or not enabled, the catalog status is `NOT_AVAILABLE` and no AI call is made. In the MVP the embedding status is always `NOT_AVAILABLE`.
 - AI provider credentials are environment variables in FastAPI only — never in source code, never in `.env.example` with real values, never exposed to Nuxt or in Express responses, never logged.
@@ -120,7 +121,7 @@ inclusion: always
 - Express: Jest with Supertest for route and integration tests.
 - FastAPI: Pytest for unit and route tests.
 - Frontend: Vitest for composable and utility tests.
-- Express: Jest + Supertest are installed (`npm test`). FastAPI (Pytest) and frontend (Vitest) are not verified as installed. Do not reference test scripts that do not exist in package.json.
+- Express: Jest + Supertest are installed (`npm test`). FastAPI: Pytest is in `requirements-dev.txt`. Frontend (Vitest) is not installed. Do not reference test scripts that do not exist in package.json.
 
 ## Available Scripts (Verified)
 
@@ -146,4 +147,12 @@ Entry point: `src/server.ts` starts the server and imports the app from `src/app
 Environment variables (see `.env.example`): `PORT` (default 5000), `DATABASE_URL`, `JWT_SECRET`, `JWT_ISSUER` (default `cardvault-api`), `JWT_AUDIENCE` (default `cardvault-web`), `NODE_ENV`.
 
 ### FastAPI (`backend/fastapi/`)
-No requirements.txt or pyproject.toml exists yet. `app.py` is empty.
+```
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-dev.txt   # Windows; .venv/bin/python elsewhere
+.venv\Scripts\python -m pytest -q                              # tests (fake provider, no network)
+.venv\Scripts\python -m uvicorn app:app --port 8000            # run locally (needs .env)
+```
+Environment variables (see `backend/fastapi/.env.example`): `MODEL_API_KEY`, `MODEL_API_BASE_URL`, `MUSE_CATALOG_MODEL`, `MUSE_CATALOG_REASONING_EFFORT`, `MUSE_CATALOG_MAX_OUTPUT_TOKENS`, `CATALOG_MAX_INPUT_CHARS`, `MUSE_TIMEOUT_SECONDS`, `MUSE_MAX_RETRIES`, `AI_SERVICE_TOKEN`.
+
+Express AI variables (optional; both or neither): `AI_SERVICE_URL`, `AI_SERVICE_TOKEN`, plus `AI_SERVICE_TIMEOUT_MS` and `AI_CATALOG_HOURLY_LIMIT`.
