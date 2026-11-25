@@ -3,6 +3,7 @@ import { AppError } from "../lib/errors.js";
 import { success } from "../lib/response.js";
 import {
   listCardsQuerySchema,
+  type CreateCardFromUrlInput,
   type CreateCardInput,
   type SetCollectionInput,
   type SetVisibilityInput,
@@ -10,6 +11,7 @@ import {
   type UpdateNotesInput,
 } from "../schemas/cards.schemas.js";
 import * as cardService from "../services/cardService.js";
+import { ingestUrl, urlIngestRateLimiter } from "../services/urlIngestionService.js";
 
 // Every handler runs behind `authenticate`, so req.user is set. The user id always comes from
 // the verified session, never from the request body or query.
@@ -31,6 +33,30 @@ export async function list(req: Request, res: Response): Promise<void> {
 export async function create(req: Request, res: Response): Promise<void> {
   const card = await cardService.createCard(userIdOf(req), req.body as CreateCardInput);
   res.status(201).json(success(card, "Card created"));
+}
+
+/** POST /api/cards/from-url: fetch a public page, then create the card (REQ-URL-011). */
+export async function createFromUrl(req: Request, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  const decision = urlIngestRateLimiter.consume(userId);
+  if (!decision.allowed) {
+    const error = new AppError(
+      429,
+      "URL_RATE_LIMITED",
+      "You've saved a lot of web pages this hour. Please try again later, or paste the text instead.",
+    );
+    error.retryAfterSeconds = decision.retryAfterSeconds;
+    throw error;
+  }
+  const page = await ingestUrl((req.body as CreateCardFromUrlInput).url);
+  const card = await cardService.createCard(userId, {
+    sourceText: page.sourceText,
+    // Without a page title, the card takes its title from the first line of the text.
+    sourceTitle: page.sourceTitle ?? undefined,
+    sourceUrl: page.sourceUrl,
+    sourceMeta: page.sourceMeta,
+  });
+  res.status(201).json(success(card, "Card saved from the web page"));
 }
 
 export async function get(req: Request, res: Response): Promise<void> {

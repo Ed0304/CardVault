@@ -221,16 +221,31 @@ export async function getCard(userId: string, cardId: string): Promise<CardDetai
   return toDetail(row);
 }
 
-export async function createCard(userId: string, input: CreateCardInput): Promise<CardDetail> {
+/**
+ * Creates a card. `sourceMeta` is set only by server-side ingestion (URL ingestion); the request
+ * schema for pasted text has no such field, so clients cannot supply it.
+ */
+export async function createCard(
+  userId: string,
+  input: CreateCardInput & { sourceMeta?: Record<string, unknown> },
+): Promise<CardDetail> {
   const statuses = initialAiStatuses();
   const title = input.sourceTitle ?? (deriveTitle(input.sourceText) || null);
 
   const result = await pool.query<{ id: string }>(
     `INSERT INTO knowledge_cards
-       (user_id, source_text, source_title, source_url, ai_catalog_status, ai_embedding_status)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (user_id, source_text, source_title, source_url, source_meta, ai_catalog_status, ai_embedding_status)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
      RETURNING id`,
-    [userId, input.sourceText, title, input.sourceUrl ?? null, statuses.catalog, statuses.embedding],
+    [
+      userId,
+      input.sourceText,
+      title,
+      input.sourceUrl ?? null,
+      input.sourceMeta ? JSON.stringify(input.sourceMeta) : null,
+      statuses.catalog,
+      statuses.embedding,
+    ],
   );
   const id = result.rows[0]?.id;
   if (!id) throw new Error("Card insert returned no row");

@@ -13,11 +13,14 @@ URL ingestion allows users to create a knowledge card by providing a public URL.
 ### REQ-URL-002: SSRF Prevention — Scheme Validation
 - The URL scheme must be validated before any DNS resolution or connection attempt.
 - Non-HTTP/HTTPS schemes are rejected immediately.
+- **Added:** only ports 80 and 443 are allowed (400 `UNSUPPORTED_PORT`), and URLs with credentials are rejected (400 `INVALID_URL`).
 
 ### REQ-URL-003: SSRF Prevention — IP Address Validation
 - After DNS resolution, the resolved IP address must be checked against a blocklist.
 - Blocked ranges: loopback (127.0.0.0/8, ::1), private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), link-local (169.254.0.0/16, fe80::/10), and the IPv6 unspecified address.
 - If the resolved IP falls within a blocked range, the request must be rejected with HTTP 422.
+- **As implemented:** only globally routable unicast addresses are allowed (a superset of the ranges above is blocked, including IPv6 unique-local, carrier-grade NAT, multicast and reserved ranges). The check applies to the address actually connected to, so DNS rebinding cannot bypass it, and the request is refused if any resolved address is blocked.
+- Requests are limited per user per hour (429 `URL_RATE_LIMITED`).
 
 ### REQ-URL-004: SSRF Prevention — Redirect Validation
 - If the server returns an HTTP redirect, the redirect target URL must be re-validated (scheme and IP) before following.
@@ -53,7 +56,7 @@ URL ingestion allows users to create a knowledge card by providing a public URL.
 
 ### REQ-URL-011: Ingestion Lifecycle Independent of AI Cataloging
 - URL ingestion consists of: validating the URL, fetching the page, extracting and sanitizing the text, and creating the card with its immutable source layer. The request ends when the card is saved.
-- The request does not wait for AI processing. AI cataloging starts after the card is saved, as in REQ-AI-001, and uses the two independent AI statuses (catalog and embedding) defined in the AI Cataloging spec.
+- The request does not wait for or start AI processing. The owner may request AI cataloging afterwards (REQ-AI-001); it uses the two independent AI statuses (catalog and embedding) defined in the AI Cataloging spec.
 - Ingestion succeeds or fails only on the ingestion rules (REQ-URL-001 to REQ-URL-009). A failed or unavailable AI operation never makes ingestion fail, and a successful ingestion never implies that AI processing succeeded.
 - Ingestion has no persisted status of its own: a request either returns the created card or returns an error. No ingestion status model is defined.
 - Acceptance criteria:

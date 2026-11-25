@@ -32,7 +32,7 @@
 - [ ] **TASK-CAT-019** Create `app/components/catalog/NotesEditor.vue` — auto-saving textarea for personal notes.
 - [ ] **TASK-CAT-020** Create `app/components/common/ConfirmDialog.vue` (generic UI primitives live in `components/common/`; there is no `ui/` folder) — modal dialog with confirm/cancel props and emits. The card detail page currently uses `window.confirm`.
 - [ ] **TASK-CAT-021** Extend the existing `app/pages/catalog/index.vue` (the card list page; `app/pages/index.vue` is the landing page) — card list with pagination, filter sidebar (by collection and tag), and search input. The list and the keyword search (`GET /api/cards?q=`, done in the Muse milestone) exist; pagination and the filter sidebar do not.
-- [ ] **TASK-CAT-022** Extend the existing `app/pages/catalog/create.vue` — tabbed form for "Paste Text" and "From URL" card creation. The tabs exist in the scaffold; they are not connected to a working backend.
+- [x] **TASK-CAT-022** Extend the existing `app/pages/catalog/create.vue` — tabbed form for "Paste Text" and "From URL" card creation. Both tabs now work (From URL through `POST /api/cards/from-url`, URL Ingestion spec); verified by integration tests and the end-to-end run, not yet in a browser.
 - [ ] **TASK-CAT-023** Extend the existing `app/pages/catalog/[id].vue` — three-panel card detail: source content (read-only), notes editor, AI metadata editor with delete button using `ConfirmDialog`.
 
 ## Community Catalog (REQ-CAT-011 to REQ-CAT-014)

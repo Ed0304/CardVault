@@ -5,6 +5,7 @@ import * as tagController from "../controllers/tagController.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { validateBody } from "../middleware/validateBody.js";
 import {
+  createCardFromUrlSchema,
   createCardSchema,
   setCollectionSchema,
   setVisibilitySchema,
@@ -19,6 +20,7 @@ router.use(authenticate);
 
 router.get("/", cardController.list);
 router.post("/", validateBody(createCardSchema), cardController.create);
+router.post("/from-url", validateBody(createCardFromUrlSchema), cardController.createFromUrl);
 router.get("/:id", cardController.get);
 router.patch("/:id/notes", validateBody(updateNotesSchema), cardController.updateNotes);
 router.patch("/:id/ai-metadata", validateBody(updateAiMetadataSchema), cardController.updateAiMetadata);

@@ -1,20 +1,31 @@
 # URL Ingestion — Tasks
 
+> Verification for ticked tasks: `tests/networkPolicy.test.ts` (29 tests) and `tests/urlIngestion.integration.test.ts` (41 tests, isolated `cardvault_test` database and a local web server). The full backend suite passes (213 tests), as do the typecheck, the production `tsc` build and the frontend production build. An end-to-end run through the production Nuxt proxy against real sites passed: a Wikipedia article, example.com, cloud metadata, localhost, a Railway private host, a PDF and a 404.
+
 ## Express Backend
 
-- [ ] **TASK-URL-001** Add `@mozilla/readability`, `jsdom`, and `ipaddr.js` to `backend/expressjs/package.json` dependencies (install when ready to implement).
-- [ ] **TASK-URL-002** Create `src/schemas/cards.schemas.ts` — add `createCardFromUrlSchema` with `z.string().url().max(2048)`.
-- [ ] **TASK-URL-003** Create `src/services/urlIngestionService.ts` — implement `ingestUrl(rawUrl)` with all SSRF protections, fetch controls, and content extraction.
-- [ ] **TASK-URL-004** Implement `isBlockedIp(ip)` helper using `ipaddr.js` — block loopback, private, and link-local ranges for both IPv4 and IPv6.
-- [ ] **TASK-URL-005** Implement redirect re-validation in `urlIngestionService` — re-check scheme and IP on every redirect; reject after 3 redirects.
-- [ ] **TASK-URL-006** Implement content extraction using `@mozilla/readability` and `jsdom` — extract `textContent`, `title`, `byline`, `siteName`.
-- [ ] **TASK-URL-007** Implement Content-Type validation — reject non-HTML responses before attempting extraction.
-- [ ] **TASK-URL-008** Implement response-size limit — abort the fetch if the response body exceeds 5 MB.
-- [ ] **TASK-URL-009** Map all internal `IngestionError` codes to the correct HTTP status codes in `errorHandler.ts`.
-- [ ] **TASK-URL-010** Add `POST /api/cards/from-url` to `src/routes/cards.routes.ts` (and its controller) — validate with `createCardFromUrlSchema`, call `urlIngestionService.ingestUrl`, then `cardService.createCard`. Respond `201` as soon as the card is saved; do not wait for AI processing (REQ-URL-011).
+- [x] **TASK-URL-001** Add `@mozilla/readability` (0.6.0), `jsdom` (31.0.1), `ipaddr.js` (2.5.0) and `@types/jsdom` (pinned).
+- [x] **TASK-URL-002** `createCardFromUrlSchema` in `src/schemas/cards.schemas.ts` (presence and length; the service returns the specific URL error codes).
+- [x] **TASK-URL-003** `src/services/urlIngestionService.ts` — `ingestUrl` with URL validation, guarded fetch, request controls and extraction.
+- [x] **TASK-URL-004** `isPublicAddress` in `src/lib/networkPolicy.ts` — allowlist of public unicast addresses (stricter than the original blocklist).
+- [x] **TASK-URL-005** Redirect re-validation, at most 3 redirects.
+- [x] **TASK-URL-006** Extraction with Readability and jsdom in `src/lib/pageExtraction.ts`, with plain-text conversion and metadata.
+- [x] **TASK-URL-007** Content-type validation before reading the body.
+- [x] **TASK-URL-008** Size limit on the transferred and decoded body, and on a declared `Content-Length`.
+- [x] **TASK-URL-009** Error codes and statuses (raised as `AppError`, handled by the existing `errorHandler.ts`).
+- [x] **TASK-URL-010** `POST /api/cards/from-url` (route, controller with a per-user hourly limit), `createCard` stores `source_meta`; 201 as soon as the card is saved.
+- [x] **TASK-URL-014** DNS-rebinding protection: the address check runs inside the socket's lookup.
+- [x] **TASK-URL-015** Tests: input validation, ten SSRF cases under the production policy, extraction and metadata, redirects, redirect re-validation, content types, 404, empty pages, three size cases, two timeout cases, unreachable host, gzip and Latin-1, truncation, rate limit, and the server-only `sourceMeta`.
 
 ## Frontend
 
-- [ ] **TASK-URL-011** Update `app/pages/catalog/create.vue` (the "From URL" tab already exists in the scaffold) — URL input field, a loading indicator that covers fetching and card creation only (not AI processing), and error message display.
-- [ ] **TASK-URL-012** Ensure `app/composables/useCatalog.ts` exposes `createCardFromUrl(url: string)` calling `POST /api/cards/from-url`. The function already exists in the scaffold; the endpoint does not.
-- [ ] **TASK-URL-013** Map known error codes (`SSRF_BLOCKED`, `UNSUPPORTED_CONTENT_TYPE`, `FETCH_TIMEOUT`, etc.) to user-friendly messages in the From URL form.
+- [x] **TASK-URL-011** `pages/catalog/create.vue` — URL field hint, "Reading the page…" loading state, server error messages; accurate "What happens next" copy (owner-requested Muse cataloging).
+- [x] **TASK-URL-012** `useCatalog.createCardFromUrl` calls `POST /api/cards/from-url` (already present).
+- [x] **TASK-URL-013** Error messages: written for users on the server and shown as is.
+- [x] **TASK-URL-016** `pages/catalog/[id].vue` — labelled source metadata with links, and a truncation notice.
+
+## Remaining
+
+- [ ] **TASK-URL-017** Manual browser check of the From URL flow.
+- [ ] **TASK-URL-018** Deploy the Express changes to Railway (needs approval). No migration is needed: `source_meta` already exists.
+- [ ] **[FUTURE]** **TASK-URL-019** Run extraction in a worker thread so large pages never block the event loop.

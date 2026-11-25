@@ -25,7 +25,7 @@ const onSubmit = async () => {
   <section>
     <CommonPageHeading
       title="New card"
-      description="Save text or a public web page. CardVault keeps the original and AI drafts the catalog entry."
+      description="Save text or a public web page. CardVault keeps the original, and Muse can suggest its catalog entry."
     />
 
     <div class="create">
@@ -80,15 +80,16 @@ const onSubmit = async () => {
           label="Public URL"
           type="url"
           required
+          maxlength="2048"
           placeholder="https://"
-          hint="Only public http and https pages are supported."
+          hint="A public http or https web page. CardVault saves its readable text and details, not the page's HTML. Pages that need a login or JavaScript to show their text can't be read; paste the text instead."
         />
 
         <CommonAppAlert v-if="error" title="Couldn't save the card">{{ error }}</CommonAppAlert>
 
         <div class="create__actions">
           <CommonAppButton type="submit" :loading="isLoading">
-            {{ isLoading ? 'Saving…' : 'Save card' }}
+            {{ isLoading ? (tab === 'url' ? 'Reading the page…' : 'Saving…') : 'Save card' }}
           </CommonAppButton>
           <CommonAppButton to="/catalog" variant="ghost">Cancel</CommonAppButton>
         </div>
@@ -100,12 +101,12 @@ const onSubmit = async () => {
           <h2 id="next-title">What happens next</h2>
         </div>
         <ol class="create__steps">
-          <li>Your original content is saved and kept as is.</li>
-          <li>AI drafts a summary, subjects and keywords in the background.</li>
-          <li>You review and edit the catalog entry, and add your own notes.</li>
+          <li>Your original content is saved and kept as is. From a URL, CardVault reads the page's text once.</li>
+          <li>On the card, choose “Catalog with Muse” to get a suggested summary, subjects and keywords.</li>
+          <li>You review and edit the suggestions, save them, and add your own notes.</li>
         </ol>
         <p class="create__aside-note">
-          If AI cataloging fails, your card is still saved.
+          Cards are private. Nothing is sent to AI until you ask.
         </p>
       </aside>
     </div>

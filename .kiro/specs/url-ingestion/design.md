@@ -1,148 +1,90 @@
-# URL Ingestion — Design
+# URL Ingestion — Design (implemented)
 
 ## Architecture
 
 ```
-Nuxt Frontend
-    │  POST /api/cards/from-url { url }
-    ▼
-Express — urlIngestionService
-    ├── 1. Validate URL scheme (HTTP/HTTPS only)
-    ├── 2. Resolve DNS → validate IP (SSRF blocklist)
-    ├── 3. Fetch HTML (timeout 10s, max 5 MB, follow ≤3 redirects with re-validation)
-    ├── 4. Validate Content-Type (HTML only)
-    ├── 5. Extract text and metadata
-    ├── 6. Sanitize extracted content
-    └── 7. Return { sourceText, sourceUrl, sourceTitle, sourceMeta }
-    │
-    ▼
-cardService.createCard (stores immutable source, returns the card)
-    │
-    ▼  after the response; not awaited, not part of ingestion
-AI processing: catalog generation and embedding generation, each with its own status
+Nuxt  ──POST /api/cards/from-url { url }──▶  Express
+                                               cardController.createFromUrl
+                                                 1. authenticate; per-user hourly limit (429)
+                                                 2. urlIngestionService.ingestUrl
+                                                    a. validate URL: http/https, ports 80/443,
+                                                       no credentials (400)
+                                                    b. fetch with the address checked inside the
+                                                       socket's DNS lookup (422 SSRF_BLOCKED)
+                                                    c. ≤ 3 redirects, each re-validated
+                                                    d. 200 only; HTML content types only
+                                                    e. byte limit on transferred and decoded body
+                                                    f. decode charset; extract text and metadata
+                                                 3. cardService.createCard (source layer + meta)
+Nuxt  ◀── 201 card (private, AI statuses NOT_AVAILABLE) ──
 ```
 
-## Ingestion Lifecycle
+AI cataloging is not part of ingestion. The owner requests it afterwards from the card page (AI Cataloging REQ-AI-001). The fetched text reaches Muse only inside the delimited prompt (REQ-URL-010).
 
-Steps 1 to 7 above and `cardService.createCard` run inside the request. The request ends when the card is saved and returned. AI processing starts afterwards (see the AI Cataloging design) and is not awaited. Ingestion succeeds or fails only on the ingestion rules, so a failed AI operation never fails ingestion, and a successful ingestion says nothing about AI success. No ingestion status is persisted: the outcome is the created card or an error.
+## Server-Side Request Forgery Protection
 
-## API Endpoint
+| Control | Implementation |
+|---|---|
+| Scheme | `http:` and `https:` only (`INVALID_SCHEME`, 400) |
+| Port | 80 and 443 only (`UNSUPPORTED_PORT`, 400). Stops CardVault being used to probe other services on public hosts |
+| Credentials | `user:pass@` URLs rejected (`INVALID_URL`, 400) |
+| Address policy | `src/lib/networkPolicy.ts`: an **allowlist** of globally routable unicast addresses (`ipaddr.js` `range() === "unicast"` after unwrapping IPv4-mapped IPv6). Blocks everything in the original blocklist, plus carrier-grade NAT, multicast, broadcast, reserved, documentation, IPv6 unique-local (including Railway's `fd12:…` private network), and the 6to4, NAT64 and Teredo ranges |
+| DNS rebinding | The check runs inside the `lookup` function that the socket uses, so the address that is checked is the address that is connected to. If any resolved address is not allowed, the request is refused. IP literals are checked before connecting (Node skips the lookup for them) |
+| Redirects | Manual. Each `Location` is resolved and validated like a submitted URL, then fetched through the same guarded lookup. A fourth redirect gives `TOO_MANY_REDIRECTS` (422); an invalid target gives `REDIRECT_NOT_ALLOWED` (422) |
+| Connections | `agent: false` (no pooled sockets), no proxy |
 
-### POST /api/cards/from-url
-Request:
-```json
-{ "url": "https://example.com/article" }
-```
-Response (201) — same shape as a regular card create response. The AI statuses in it describe the state of AI processing at creation. They are not an outcome of ingestion.
+The original design checked DNS with `dns.lookup` and then fetched. That leaves a gap between the check and the connection, which a hostname switching from a public to a private address could exploit. It was replaced by the guarded lookup above.
 
-Error response (422):
-```json
-{
-  "data": null,
-  "error": "SSRF_BLOCKED",
-  "message": "The URL resolves to a private or reserved IP address."
-}
-```
+## Request Controls
 
-## URL Ingestion Service
+| Control | Value |
+|---|---|
+| Deadline | `URL_FETCH_TIMEOUT_MS` (10,000): one deadline covering every redirect and the body (`FETCH_TIMEOUT`, 422) |
+| Size | `URL_FETCH_MAX_BYTES` (5 MB) on both the transferred and the decompressed body, so a compressed "bomb" is stopped; a larger declared `Content-Length` is refused before reading (`RESPONSE_TOO_LARGE`, 422) |
+| Encodings | gzip, deflate and br decoded; other encodings refused |
+| Status | 200 only (`FETCH_FAILED`, 422, names the status) |
+| Content type | `text/html` and `application/xhtml+xml` only; a missing type is refused (`UNSUPPORTED_CONTENT_TYPE`, 422) |
+| User-Agent | `CardVault/1.0 (+https://github.com/Ed0304/CardVault; knowledge-card ingestion)` |
+| Rate limit | `URL_INGEST_HOURLY_LIMIT` (30) pages per user per hour, in memory (`URL_RATE_LIMITED`, 429 with `Retry-After`) |
+| Logging | Error class or code only; never the URL or page content |
 
-```typescript
-// src/services/urlIngestionService.ts
+## Extraction (`src/lib/pageExtraction.ts`)
 
-interface IngestionResult {
-  sourceText: string
-  sourceUrl: string
-  sourceTitle: string | null
-  sourceMeta: {
-    author: string | null
-    publishedAt: string | null
-    siteName: string | null
-    canonicalUrl: string | null
-  }
-}
+- Charset from the `Content-Type` header, else a `<meta charset>` in the first 4 KB, else UTF-8.
+- `jsdom` with its defaults (scripts not run, no subresources loaded) and a silent virtual console; `@mozilla/readability` on a copy of the document.
+- Plain text built from the article's DOM, keeping paragraph breaks and list items (`- `). Scripts, styles, forms and embedded content are skipped. When Readability finds less than 200 characters, the whole body is used instead, without navigation, header, footer and aside.
+- Control characters (including U+0000, which PostgreSQL rejects) are removed. No HTML is stored.
+- Less than 50 non-space characters gives `EXTRACTION_FAILED` (422; for example pages that need JavaScript).
+- Text longer than 100,000 characters (`MAX_SOURCE_TEXT_LENGTH`) is cut at a word boundary and `sourceMeta.truncated` is set.
 
-async function ingestUrl(rawUrl: string): Promise<IngestionResult>
-```
+## Stored Card
 
-### Validation Steps
+- `source_url`: the URL the user submitted (fragment removed).
+- `source_title`: Readability title, else `og:title`, else `<title>` (≤ 300 characters); without one the card uses its first line.
+- `source_meta` (JSONB): `siteName`, `author`, `publishedAt` (ISO), `canonicalUrl` (http/https only), `finalUrl` (after redirects), `fetchedAt`, `truncated`. Set only by the server; the text endpoint's schema has no such field.
+- Visibility `PRIVATE`; both AI statuses `NOT_AVAILABLE`.
 
-```typescript
-// Step 1: Parse and validate scheme
-const parsed = new URL(rawUrl)
-if (!['http:', 'https:'].includes(parsed.protocol)) {
-  throw new IngestionError('INVALID_SCHEME', 'Only HTTP and HTTPS URLs are supported.')
-}
+## API
 
-// Step 2: Resolve IP and check SSRF blocklist
-const ip = await dns.lookup(parsed.hostname)
-if (isBlockedIp(ip.address)) {
-  throw new IngestionError('SSRF_BLOCKED', 'The URL resolves to a private or reserved IP address.')
-}
+`POST /api/cards/from-url` with body `{ "url": "…" }` (1–2,048 characters) returns 201 with the card. The error envelope is the standard one: `{ "data": null, "error": { "code": "SSRF_BLOCKED" }, "message": "…" }`.
 
-// Step 3: Fetch with controls
-// - timeout: 10_000ms
-// - maxRedirects: 3 (re-validate each redirect target)
-// - maxResponseSize: 5 * 1024 * 1024 bytes
-// - User-Agent: 'CardVault/1.0 (+https://github.com/your-repo)'
+| Code | Status |
+|---|---|
+| `VALIDATION_ERROR` | 400 (missing, empty or over-long `url`) |
+| `INVALID_URL`, `INVALID_SCHEME`, `UNSUPPORTED_PORT` | 400 |
+| `SSRF_BLOCKED`, `REDIRECT_NOT_ALLOWED`, `TOO_MANY_REDIRECTS` | 422 |
+| `FETCH_TIMEOUT`, `FETCH_FAILED`, `RESPONSE_TOO_LARGE` | 422 |
+| `UNSUPPORTED_CONTENT_TYPE`, `EXTRACTION_FAILED` | 422 |
+| `URL_RATE_LIMITED` | 429 |
 
-// Step 4: Validate Content-Type
-if (!contentType.includes('text/html')) {
-  throw new IngestionError('UNSUPPORTED_CONTENT_TYPE', 'Only HTML pages are supported.')
-}
-```
-
-### SSRF Blocklist Helper
-
-```typescript
-function isBlockedIp(ip: string): boolean
-// Returns true for:
-// IPv4: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16
-// IPv6: ::1, fe80::/10, ::
-```
-
-Use the `ipaddr.js` library for CIDR range matching.
-
-### Content Extraction
-
-Use the `@mozilla/readability` package (Node.js port) combined with `jsdom` for HTML parsing and readable content extraction:
-
-```typescript
-import { Readability } from '@mozilla/readability'
-import { JSDOM } from 'jsdom'
-
-const dom = new JSDOM(html, { url: resolvedUrl })
-const reader = new Readability(dom.window.document)
-const article = reader.parse()
-// article.textContent, article.title, article.byline, article.siteName
-```
-
-Sanitize `article.textContent` — strip any remaining HTML tags using a plain text extraction pass.
-
-## Zod Validation Schema
-
-```typescript
-// src/schemas/cards.schemas.ts
-export const createCardFromUrlSchema = z.object({
-  url: z.string().url().max(2048),
-})
-```
-
-## Error Types
-
-| Error Code | HTTP Status | Meaning |
-|---|---|---|
-| `INVALID_SCHEME` | 400 | Non-HTTP/HTTPS scheme |
-| `INVALID_URL` | 400 | Malformed URL |
-| `SSRF_BLOCKED` | 422 | Resolved IP in blocked range |
-| `TOO_MANY_REDIRECTS` | 422 | Redirect limit exceeded |
-| `FETCH_TIMEOUT` | 422 | Request timed out |
-| `UNSUPPORTED_CONTENT_TYPE` | 422 | Not an HTML page |
-| `EXTRACTION_FAILED` | 422 | No usable text extracted |
-| `RESPONSE_TOO_LARGE` | 422 | Response exceeds 5 MB |
+Every message is written for the user; the frontend shows it as is.
 
 ## Frontend
 
-- `app/pages/catalog/create.vue` includes a "From URL" tab with a URL input field and submit button (the tab exists in the scaffold).
-- On submission, calls `POST /api/cards/from-url`.
-- Displays a loading state while the page is fetched and the card is created, which can take several seconds. AI processing is not part of this wait. The new card shows its AI statuses and updates as they change.
-- Maps known error codes to user-friendly messages.
+- `pages/catalog/create.vue`: the "From URL" tab explains what is saved and what can't be read; the button reads "Reading the page…" while waiting; server messages are shown in the existing error alert.
+- `pages/catalog/[id].vue`: source metadata with readable labels (Site, Author, Published, Saved from the web, Canonical address, Read from) and links; a notice when the text was cut.
+
+## Known Limits
+
+- Parsing runs on the Express event loop. Pages up to the 5 MB limit can take a moment to parse; the rate limit bounds the abuse. Moving extraction to a worker thread is a future option.
+- Pages rendered by JavaScript, behind logins, or behind bot protection cannot be read.

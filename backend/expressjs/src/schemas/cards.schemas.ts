@@ -38,6 +38,15 @@ export const createCardSchema = z.object({
     .transform((value) => (value ? value : undefined)),
 });
 
+/**
+ * Create a card from a public web page (REQ-URL-001). Only presence and length are checked here;
+ * the ingestion service parses the URL and returns specific error codes (INVALID_URL,
+ * INVALID_SCHEME, UNSUPPORTED_PORT).
+ */
+export const createCardFromUrlSchema = z.object({
+  url: z.string().trim().min(1, "is required").max(2048, "must be at most 2048 characters"),
+});
+
 export const updateNotesSchema = z.object({
   // Empty notes are stored as "no notes".
   notes: z.string().max(20_000, "must be at most 20000 characters").nullable(),
@@ -100,6 +109,7 @@ export const listPublicCardsQuerySchema = z.object({
 });
 
 export type CreateCardInput = z.infer<typeof createCardSchema>;
+export type CreateCardFromUrlInput = z.infer<typeof createCardFromUrlSchema>;
 export type SetVisibilityInput = z.infer<typeof setVisibilitySchema>;
 export type ListPublicCardsQuery = z.infer<typeof listPublicCardsQuerySchema>;
 export type UpdateNotesInput = z.infer<typeof updateNotesSchema>;

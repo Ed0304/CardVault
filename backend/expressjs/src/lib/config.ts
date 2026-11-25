@@ -18,6 +18,11 @@ const envSchema = z.object({
   AI_SERVICE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(90_000),
   // Catalog requests per user per hour (abuse and cost protection).
   AI_CATALOG_HOURLY_LIMIT: z.coerce.number().int().min(1).max(1_000).default(20),
+  // URL ingestion (REQ-URL-005). One deadline covers every redirect and the whole body.
+  URL_FETCH_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(10_000),
+  URL_FETCH_MAX_BYTES: z.coerce.number().int().min(10_000).max(20 * 1024 * 1024).default(5 * 1024 * 1024),
+  // Pages fetched per user per hour; each one is an outbound request made by CardVault.
+  URL_INGEST_HOURLY_LIMIT: z.coerce.number().int().min(1).max(1_000).default(30),
 }).refine(
   (env) => Boolean(env.AI_SERVICE_URL) === Boolean(env.AI_SERVICE_TOKEN),
   { message: "set both or neither", path: ["AI_SERVICE_URL"] },
@@ -61,5 +66,11 @@ export const config = {
     serviceToken: parsed.data.AI_SERVICE_TOKEN ?? null,
     timeoutMs: parsed.data.AI_SERVICE_TIMEOUT_MS,
     catalogHourlyLimit: parsed.data.AI_CATALOG_HOURLY_LIMIT,
+  },
+  urlIngestion: {
+    timeoutMs: parsed.data.URL_FETCH_TIMEOUT_MS,
+    maxBytes: parsed.data.URL_FETCH_MAX_BYTES,
+    hourlyLimit: parsed.data.URL_INGEST_HOURLY_LIMIT,
+    maxRedirects: 3,
   },
 } as const;

@@ -12,12 +12,28 @@ const onDelete = async () => {
   if (await deleteCard(id.value)) await navigateTo('/catalog')
 }
 
-/** Source metadata entries that can be shown as plain text. */
-const sourceMetaEntries = computed(() =>
-  Object.entries(card.value?.sourceMeta ?? {}).filter(
-    (entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0,
-  ),
-)
+/** Source metadata recorded when a web page was saved, in display order. */
+const SOURCE_META_FIELDS: { key: string; label: string; kind: 'text' | 'date' | 'url' }[] = [
+  { key: 'siteName', label: 'Site', kind: 'text' },
+  { key: 'author', label: 'Author', kind: 'text' },
+  { key: 'publishedAt', label: 'Published', kind: 'date' },
+  { key: 'fetchedAt', label: 'Saved from the web', kind: 'date' },
+  { key: 'canonicalUrl', label: 'Canonical address', kind: 'url' },
+  { key: 'finalUrl', label: 'Read from', kind: 'url' },
+]
+
+const sourceMetaEntries = computed(() => {
+  const meta = card.value?.sourceMeta ?? {}
+  return SOURCE_META_FIELDS.flatMap(({ key, label, kind }) => {
+    const value = meta[key]
+    if (typeof value !== 'string' || !value) return []
+    // The address actually read is worth showing only when a redirect changed it.
+    if (kind === 'url' && value === card.value?.sourceUrl) return []
+    if (kind === 'url' && !/^https?:\/\//.test(value)) return []
+    return [{ key, label, kind, value: kind === 'date' ? formatDate(value) : value }]
+  })
+})
+const sourceWasTruncated = computed(() => card.value?.sourceMeta?.truncated === true)
 </script>
 
 <template>
@@ -95,11 +111,17 @@ const sourceMetaEntries = computed(() =>
             </p>
 
             <dl v-if="sourceMetaEntries.length" class="detail-meta">
-              <div v-for="[key, value] in sourceMetaEntries" :key="key">
-                <dt class="mono">{{ key }}</dt>
-                <dd>{{ value }}</dd>
+              <div v-for="entry in sourceMetaEntries" :key="entry.key">
+                <dt class="mono">{{ entry.label }}</dt>
+                <dd>
+                  <a v-if="entry.kind === 'url'" :href="entry.value" rel="noopener noreferrer nofollow">{{ entry.value }}</a>
+                  <template v-else>{{ entry.value }}</template>
+                </dd>
               </div>
             </dl>
+            <CommonAppAlert v-if="sourceWasTruncated" variant="info">
+              This page was very long, so only its first 100,000 characters were saved.
+            </CommonAppAlert>
 
             <p v-if="card.sourceText" class="detail-original">{{ card.sourceText }}</p>
             <p v-else class="text-muted">

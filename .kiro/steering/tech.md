@@ -156,3 +156,5 @@ python -m venv .venv
 Environment variables (see `backend/fastapi/.env.example`): `MODEL_API_KEY`, `MODEL_API_BASE_URL`, `MUSE_CATALOG_MODEL`, `MUSE_CATALOG_REASONING_EFFORT`, `MUSE_CATALOG_MAX_OUTPUT_TOKENS`, `CATALOG_MAX_INPUT_CHARS`, `MUSE_TIMEOUT_SECONDS`, `MUSE_MAX_RETRIES`, `AI_SERVICE_TOKEN`.
 
 Express AI variables (optional; both or neither): `AI_SERVICE_URL`, `AI_SERVICE_TOKEN`, plus `AI_SERVICE_TIMEOUT_MS` and `AI_CATALOG_HOURLY_LIMIT`.
+
+Express URL-ingestion variables (optional; defaults 10000, 5242880, 30): `URL_FETCH_TIMEOUT_MS`, `URL_FETCH_MAX_BYTES`, `URL_INGEST_HOURLY_LIMIT`. URL ingestion runs in Express (`urlIngestionService.ts`) with `@mozilla/readability`, `jsdom` and `ipaddr.js`.
