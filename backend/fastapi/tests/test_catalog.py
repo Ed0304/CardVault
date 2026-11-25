@@ -44,9 +44,11 @@ class FakeCompletions:
 
     async def create(self, **kwargs):
         self.calls.append(kwargs)
-        if isinstance(self.result, Exception):
-            raise self.result
-        return self.result
+        # A list gives one result per call, in order.
+        result = self.result.pop(0) if isinstance(self.result, list) else self.result
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 class FakeOpenAI:
@@ -65,10 +67,71 @@ def client():
     app.dependency_overrides.clear()
 
 
-def use_provider(result) -> FakeCompletions:
+def use_provider(result, settings: Settings | None = None) -> FakeCompletions:
     fake = FakeOpenAI(result)
-    app.dependency_overrides[get_catalog_client] = lambda: MuseCatalogClient(get_settings(), client=fake)
+    app.dependency_overrides[get_catalog_client] = lambda: MuseCatalogClient(settings or get_settings(), client=fake)
     return fake.completions
+
+
+def model_not_found():
+    return openai.NotFoundError(
+        "model not found",
+        response=httpx.Response(404, request=REQUEST),
+        body={"type": "invalid_request_error", "code": "model_not_found"},
+    )
+
+
+def settings_with_fallback(monkeypatch, fallback: str) -> Settings:
+    monkeypatch.setenv("MUSE_CATALOG_MODEL", "muse-spark-1.3")
+    monkeypatch.setenv("MUSE_CATALOG_FALLBACK_MODELS", fallback)
+    return Settings(_env_file=None)
+
+
+class TestModelFallback:
+    def test_falls_back_when_the_model_is_not_found(self, client, monkeypatch):
+        settings = settings_with_fallback(monkeypatch, "muse-spark-1.2, muse-ember-1.0")
+        calls = use_provider([model_not_found(), completion(entry(), model="muse-spark-1.2")], settings)
+        res = post(client)
+        assert res.status_code == 200
+        assert res.json()["model"] == "muse-spark-1.2"
+        assert [c["model"] for c in calls.calls] == ["muse-spark-1.3", "muse-spark-1.2"]
+
+    def test_reports_failure_when_every_model_is_not_found(self, client, monkeypatch):
+        settings = settings_with_fallback(monkeypatch, "muse-spark-1.2")
+        calls = use_provider([model_not_found(), model_not_found()], settings)
+        res = post(client)
+        assert res.status_code == 502
+        assert res.json()["error"]["code"] == "PROVIDER_REJECTED"
+        assert len(calls.calls) == 2
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            openai.AuthenticationError("bad key", response=httpx.Response(401, request=REQUEST), body=None),
+            openai.NotFoundError("no route", response=httpx.Response(404, request=REQUEST), body=None),
+            openai.BadRequestError("bad", response=httpx.Response(400, request=REQUEST), body=None),
+        ],
+        ids=["401", "404-other", "400"],
+    )
+    def test_does_not_fall_back_for_other_errors(self, client, monkeypatch, error):
+        settings = settings_with_fallback(monkeypatch, "muse-spark-1.2")
+        calls = use_provider([error, completion(entry())], settings)
+        assert post(client).status_code == 502
+        assert len(calls.calls) == 1
+
+    def test_no_fallback_by_default(self, client):
+        calls = use_provider([model_not_found(), completion(entry())])
+        assert post(client).status_code == 502
+        assert len(calls.calls) == 1
+
+    def test_rejects_contributor_mode_fallbacks(self, monkeypatch):
+        monkeypatch.setenv("MUSE_CATALOG_FALLBACK_MODELS", "muse-spark-1.2, muse-spark-1.2-contributor")
+        with pytest.raises(ValidationError, match="Contributor-mode"):
+            Settings(_env_file=None)
+
+    def test_lists_models_once_in_order(self, monkeypatch):
+        settings = settings_with_fallback(monkeypatch, ' "muse-spark-1.2", muse-spark-1.3 ,, muse-ember-1.0 ')
+        assert settings.catalog_models == ["muse-spark-1.3", "muse-spark-1.2", "muse-ember-1.0"]
 
 
 def post(client, body=None, headers=AUTH):

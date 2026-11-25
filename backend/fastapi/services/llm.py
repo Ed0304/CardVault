@@ -196,38 +196,50 @@ class MuseCatalogClient:
         user_message, truncated = build_user_message(request, settings.catalog_max_input_chars)
         started = time.monotonic()
 
-        try:
-            completion = await self._client.chat.completions.create(
-                model=settings.catalog_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
-                ],
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {"name": "catalog_entry", "strict": True, "schema": CATALOG_SCHEMA},
-                },
-                reasoning_effort=settings.catalog_reasoning_effort,
-                max_tokens=settings.catalog_max_output_tokens,
-            )
-        except openai.OpenAIError as error:
-            failure = _classify(error)
-            # The provider's error type and code (e.g. "insufficient_quota") and, for network
-            # failures, the underlying exception class. Never the message, which may echo input.
-            cause = error.__cause__
-            logger.warning(
-                "catalog request failed model=%s error=%s status=%s provider_type=%s provider_code=%s provider_param=%s cause=%s duration_ms=%d",
-                settings.catalog_model,
-                type(error).__name__,
-                getattr(error, "status_code", None),
-                getattr(error, "type", None),
-                getattr(error, "code", None),
-                # For a 400: which request parameter the provider rejected (a name, never input).
-                getattr(error, "param", None),
-                type(cause).__name__ if cause else None,
-                (time.monotonic() - started) * 1000,
-            )
-            raise failure from error
+        models = settings.catalog_models
+        completion = None
+        used_model = models[0]
+        for index, model in enumerate(models):
+            try:
+                completion = await self._client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_message},
+                    ],
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {"name": "catalog_entry", "strict": True, "schema": CATALOG_SCHEMA},
+                    },
+                    reasoning_effort=settings.catalog_reasoning_effort,
+                    max_tokens=settings.catalog_max_output_tokens,
+                )
+                used_model = completion.model or model
+                break
+            except openai.OpenAIError as error:
+                # The provider's error type and code (e.g. "model_not_found") and, for network
+                # failures, the underlying exception class. Never the message, which may echo input.
+                cause = error.__cause__
+                logger.warning(
+                    "catalog request failed model=%s error=%s status=%s provider_type=%s provider_code=%s provider_param=%s cause=%s duration_ms=%d",
+                    model,
+                    type(error).__name__,
+                    getattr(error, "status_code", None),
+                    getattr(error, "type", None),
+                    getattr(error, "code", None),
+                    # For a 400: which request parameter the provider rejected (a name, never input).
+                    getattr(error, "param", None),
+                    type(cause).__name__ if cause else None,
+                    (time.monotonic() - started) * 1000,
+                )
+                # Only "this model isn't available right now" moves on to the next model; every
+                # other error would fail the same way on any model.
+                is_model_missing = isinstance(error, openai.NotFoundError) and getattr(error, "code", None) == "model_not_found"
+                if is_model_missing and index + 1 < len(models):
+                    logger.warning("catalog falling back from model=%s to model=%s", model, models[index + 1])
+                    continue
+                raise _classify(error) from error
+        assert completion is not None
 
         choice = completion.choices[0] if completion.choices else None
         content = choice.message.content if choice and choice.message else None
@@ -247,7 +259,7 @@ class MuseCatalogClient:
             # json.JSONDecodeError and pydantic.ValidationError are both ValueErrors.
             logger.warning(
                 "catalog output rejected model=%s reason=%s output_tokens=%s",
-                settings.catalog_model,
+                used_model,
                 type(error).__name__,
                 usage.output_tokens,
             )
@@ -257,7 +269,7 @@ class MuseCatalogClient:
 
         logger.info(
             "catalog generated model=%s input_chars=%d truncated=%s input_tokens=%s output_tokens=%s duration_ms=%d",
-            settings.catalog_model,
+            used_model,
             len(request.text),
             truncated,
             usage.input_tokens,
@@ -268,7 +280,7 @@ class MuseCatalogClient:
             summary=summary,
             subjects=subjects,
             keywords=keywords,
-            model=completion.model or settings.catalog_model,
+            model=used_model,
             truncated=truncated,
             usage=usage,
         )

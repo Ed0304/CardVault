@@ -21,6 +21,10 @@ class Settings(BaseSettings):
 
     # Catalog generation (REQ-AI-002 to REQ-AI-004).
     catalog_model: str = Field(alias="MUSE_CATALOG_MODEL", min_length=1)
+    # Comma-separated models tried, in order, only when the provider answers model_not_found for
+    # the previous one (Meta has been reported to do this intermittently for a model the key can
+    # use). Empty means no fallback.
+    catalog_fallback_models: str = Field("", alias="MUSE_CATALOG_FALLBACK_MODELS")
     # Cataloging is bounded extraction, not multi-step reasoning, so low effort is enough.
     # The reasoning models reject "none".
     catalog_reasoning_effort: Literal["minimal", "low", "medium", "high"] = Field(
@@ -38,7 +42,10 @@ class Settings(BaseSettings):
     # Shared secret that Express sends as a bearer token (decision D-5).
     ai_service_token: SecretStr = Field(alias="AI_SERVICE_TOKEN")
 
-    @field_validator("model_api_key", "model_api_base_url", "catalog_model", "ai_service_token", mode="before")
+    @field_validator(
+        "model_api_key", "model_api_base_url", "catalog_model", "catalog_fallback_models", "ai_service_token",
+        mode="before",
+    )
     @classmethod
     def strip_pasted_value(cls, value: object) -> object:
         # Values pasted into a hosting dashboard often carry a trailing space, a line break or
@@ -49,13 +56,23 @@ class Settings(BaseSettings):
                 value = value[1:-1].strip()
         return value
 
-    @field_validator("catalog_model")
+    @field_validator("catalog_model", "catalog_fallback_models")
     @classmethod
     def reject_contributor_mode(cls, value: str) -> str:
         # Contributor-mode models permit training on submitted content (REQ-AI-014).
         if "contributor" in value.lower():
             raise ValueError("Contributor-mode models must not be used for user content")
         return value
+
+    @property
+    def catalog_models(self) -> list[str]:
+        """The primary model, then each fallback once, without duplicates."""
+        models = [self.catalog_model]
+        for raw in self.catalog_fallback_models.split(","):
+            model = raw.strip().strip("\"'").strip()
+            if model and model not in models:
+                models.append(model)
+        return models
 
     @field_validator("ai_service_token")
     @classmethod

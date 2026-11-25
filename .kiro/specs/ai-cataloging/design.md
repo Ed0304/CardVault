@@ -147,6 +147,7 @@ Request model forbids unknown fields; `text` 1–100,000 characters; at most 50 
 
 | Layer | Behaviour |
 |---|---|
+| Model fallback | `MUSE_CATALOG_FALLBACK_MODELS` (comma-separated, optional, Contributor-mode ids rejected). Used only when Meta answers `404 model_not_found`, which a third-party report ([CLIProxyAPI #6117](https://github.com/router-for-me/CLIProxyAPI/issues/6117)) describes as intermittent for `muse-spark-1.3` while 1.2 stayed available. The draft records the model that answered. `scripts/check_models.py` lists the key's models and probes each one |
 | FastAPI → Meta | OpenAI SDK: `MUSE_TIMEOUT_SECONDS` (40) per attempt, `MUSE_MAX_RETRIES` (1) retry with backoff for 429, 5xx, timeouts and connection errors. 401/403 → `PROVIDER_REJECTED` (a 403 can mean the account or region is not enabled); 400/404 → `PROVIDER_REJECTED` |
 | Express → FastAPI | `AI_SERVICE_TIMEOUT_MS` (90,000). Timeout or unreachable → 503 `AI_UNAVAILABLE`; FastAPI 503 → 503; anything else → 502 `AI_CATALOG_FAILED`. Status becomes `FAILED` either way |
 | Concurrency | One running request per card (atomic claim); outcome writes are guarded by the claim's timestamp |
