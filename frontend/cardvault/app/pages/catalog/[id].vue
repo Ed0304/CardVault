@@ -162,17 +162,7 @@ const identity = computed(() => {
 
         <aside class="detail__aside">
           <!-- Personal notes: private, and never sent to AI or published. -->
-          <section class="surface surface--sunken detail-section" aria-labelledby="notes-heading">
-            <header class="detail-section__header">
-              <span class="detail-section__icon"><CommonAppIcon name="pencil" :size="18" /></span>
-              <div>
-                <p class="eyebrow">Yours · always private</p>
-                <h2 id="notes-heading" class="detail-section__title">Personal notes</h2>
-              </div>
-            </header>
-            <p v-if="card.notes" class="detail-notes">{{ card.notes }}</p>
-            <p v-else class="text-muted">No notes yet.</p>
-          </section>
+          <CatalogNotesEditor :key="card.id" :card="card" />
           <CatalogCardPublishing :card="card" />
         </aside>
       </div>
@@ -261,9 +251,6 @@ const identity = computed(() => {
   border: var(--border-width) solid var(--border-subtle);
   color: var(--color-archive-brown);
 }
-.surface--sunken .detail-section__icon {
-  background: var(--bg-surface);
-}
 .detail-section__title {
   font-size: var(--text-xl);
 }
@@ -300,12 +287,6 @@ const identity = computed(() => {
   max-width: 68ch;
   font-family: var(--font-heading);
   font-size: var(--text-lg);
-  line-height: var(--leading-relaxed);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.detail-notes {
-  max-width: 68ch;
   line-height: var(--leading-relaxed);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

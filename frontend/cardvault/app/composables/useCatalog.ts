@@ -112,6 +112,14 @@ export const useCatalog = () => {
       'This card no longer exists. Reload the page and try again.',
     )
 
+  /** Saves the personal notes. An empty or whitespace-only value clears them. */
+  const updateNotes = (id: string, notes: string) =>
+    organise(
+      () => catalogService.updateNotes(id, notes),
+      "Your notes couldn't be saved. Please try again.",
+      'This card no longer exists. Reload the page and try again.',
+    )
+
   /** Saves the catalog details (and resolves any pending AI suggestion). */
   const updateAiMetadata = (id: string, payload: UpdateAiMetadataPayload) =>
     organise(
@@ -169,6 +177,7 @@ export const useCatalog = () => {
     deleteCard,
     setCollection,
     setVisibility,
+    updateNotes,
     updateAiMetadata,
     requestCatalog,
     discardCatalogDraft,
