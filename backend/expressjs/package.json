@@ -38,6 +38,8 @@
     "typecheck": "tsc --noEmit",
     "migrate": "tsx scripts/migrate.ts",
     "db:test:setup": "tsx scripts/setup-test-db.ts",
+    "db:seed": "tsx scripts/seed.ts community_catalog_seed.sql",
+    "db:seed:remove": "tsx scripts/seed.ts remove_community_catalog_seed.sql",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   }
 }
