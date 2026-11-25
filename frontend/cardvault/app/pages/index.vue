@@ -58,16 +58,20 @@ const layers = [
           by AI, and found again by meaning.
         </p>
         <div class="hero__actions">
-          <CommonAppButton v-if="isAuthenticated" to="/catalog">
-            Open your catalog
+          <CommonAppButton v-if="isAuthenticated" to="/home">
+            Open your library
             <CommonAppIcon name="arrow-right" :size="18" />
           </CommonAppButton>
           <template v-else>
-            <CommonAppButton to="/login?redirect=%2Fcatalog">
+            <CommonAppButton to="/login">
               <CommonAppIcon name="lock" :size="18" />
               Log in to your catalog
             </CommonAppButton>
             <CommonAppButton to="/register" variant="secondary">Create an account</CommonAppButton>
+            <CommonAppButton to="/community" variant="ghost">
+              <CommonAppIcon name="globe" :size="18" />
+              Browse the Community Catalog
+            </CommonAppButton>
           </template>
         </div>
       </div>

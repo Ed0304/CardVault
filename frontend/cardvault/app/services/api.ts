@@ -8,7 +8,7 @@ export interface ApiResponse<T> {
 }
 
 interface ApiOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: Record<string, unknown>
   query?: Record<string, string | number | undefined>
 }

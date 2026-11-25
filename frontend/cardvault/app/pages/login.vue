@@ -14,6 +14,8 @@ const isSubmitting = ref(false)
 
 /** Set when the route guard sent the visitor here from a signed-in-only page. */
 const wasRedirected = computed(() => typeof route.query.redirect === 'string')
+/** The visitor came from a Community card, most likely to save it. */
+const fromCommunity = computed(() => safeRedirectPath(route.query.redirect, '').startsWith('/community'))
 
 const onSubmit = async () => {
   isSubmitting.value = true
@@ -41,6 +43,9 @@ const onSubmit = async () => {
     </header>
 
     <CommonAppAlert v-if="error">{{ error }}</CommonAppAlert>
+    <CommonAppAlert v-else-if="fromCommunity" variant="info">
+      Log in to save cards to your vault. You'll go straight back to the card.
+    </CommonAppAlert>
     <CommonAppAlert v-else-if="wasRedirected" variant="info">
       Log in to open that page. Your library is private to your account.
     </CommonAppAlert>

@@ -12,6 +12,8 @@ export interface PublicUser {
   username: string;
   email: string;
   createdAt: string;
+  /** False until the user saves recommendation preferences; the app then shows onboarding. */
+  onboardingCompleted: boolean;
 }
 
 export interface AuthResult {
@@ -36,6 +38,7 @@ function toPublicUser(user: UserRecord): PublicUser {
     username: user.username,
     email: user.email,
     createdAt: user.createdAt.toISOString(),
+    onboardingCompleted: user.onboardingCompleted,
   };
 }
 

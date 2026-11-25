@@ -42,3 +42,22 @@ export const authenticate: RequestHandler = (req, _res, next) => {
     next(unauthorized());
   }
 };
+
+/**
+ * For routes that guests may read (the Community Catalog). A valid token sets `req.user.id` as
+ * `authenticate` does; a missing or invalid one leaves `req.user` undefined and the request
+ * continues as a guest. It never grants anything by itself: handlers decide what a guest sees,
+ * and any write route must use `authenticate` instead.
+ */
+export const optionalAuthenticate: RequestHandler = (req, _res, next) => {
+  const token = extractToken(req);
+  if (token) {
+    try {
+      req.user = { id: verifyAccessToken(token).userId };
+    } catch {
+      // An expired or tampered cookie reads as a guest rather than failing a public page.
+      delete req.user;
+    }
+  }
+  next();
+};

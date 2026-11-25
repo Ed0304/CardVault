@@ -74,6 +74,7 @@ export function as(session: Session) {
     get: (url: string) => request(app).get(url).set("Cookie", session.cookie),
     post: (url: string, body?: object) => request(app).post(url).set("Cookie", session.cookie).send(body),
     patch: (url: string, body?: object) => request(app).patch(url).set("Cookie", session.cookie).send(body),
+    put: (url: string, body?: object) => request(app).put(url).set("Cookie", session.cookie).send(body),
     delete: (url: string) => request(app).delete(url).set("Cookie", session.cookie),
   };
 }

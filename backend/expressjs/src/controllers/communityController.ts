@@ -4,8 +4,10 @@ import { success } from "../lib/response.js";
 import { listPublicCardsQuerySchema } from "../schemas/cards.schemas.js";
 import * as communityService from "../services/communityService.js";
 
-// Every handler runs behind `authenticate`; the viewer's id always comes from the verified session.
+// The viewer's id always comes from the verified session. `save` runs behind `authenticate`;
+// the read routes run behind `optionalAuthenticate`, so a guest has no id.
 const userIdOf = (req: Request): string => req.user!.id;
+const viewerIdOf = (req: Request): string | null => req.user?.id ?? null;
 const cardIdOf = (req: Request): string => String(req.params.id);
 
 /** GET /api/community/cards */
@@ -23,7 +25,7 @@ export async function list(req: Request, res: Response): Promise<void> {
 
 /** GET /api/community/cards/:id */
 export async function get(req: Request, res: Response): Promise<void> {
-  res.status(200).json(success(await communityService.getPublicCard(userIdOf(req), cardIdOf(req))));
+  res.status(200).json(success(await communityService.getPublicCard(viewerIdOf(req), cardIdOf(req))));
 }
 
 /** POST /api/community/cards/:id/save */

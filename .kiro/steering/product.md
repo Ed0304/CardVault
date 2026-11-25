@@ -32,12 +32,13 @@ Information saved online is quickly lost, forgotten, or buried. Existing tools e
 8. **Discover in the community** — Browse and keyword-search published cards, open one, and see its author and source.
 9. **Save to My Vault** — Save a published card as an independent, private copy that keeps the original's attribution.
 
-## Three Experiences
+## Experiences
 
 | Experience | What it is |
 |---|---|
 | My Vault | The user's own cards. Private by default. Notes, collections and tags are always private. |
-| Community Catalog | Cards their owners published, visible to every signed-in user. Not a feed: no likes, comments, followers, reputation or recommendations. |
+| Community Catalog | Cards their owners published, readable by anyone, including guests without an account. Saving, creating, editing and publishing need sign-in. Not a social feed: no likes, comments, followers or reputation. |
+| Home | For signed-in users: a welcome, the main actions, and a few "Recommended for today" cards from the Community Catalog, each with the reason it was picked. New users choose interests (or "Surprise me") once, in the welcome onboarding, and change them in Settings. |
 | Public card detail | The approved public fields of one published card, with a **Save to My Vault** action. |
 
 A saved card is an independent copy owned by the saver, never a live reference or shared ownership. Edits, unpublishing or deletion of the original never change or remove the copy.

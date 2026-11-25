@@ -6,6 +6,8 @@ export interface UserRecord {
   email: string;
   passwordHash: string;
   createdAt: Date;
+  /** True once the user has saved recommendation preferences (welcome onboarding). */
+  onboardingCompleted: boolean;
 }
 
 interface UserRow {
@@ -14,7 +16,12 @@ interface UserRow {
   email: string;
   password_hash: string;
   created_at: Date;
+  onboarding_completed: boolean;
 }
+
+// Onboarding is complete exactly when a preferences row exists (migration 008).
+const USER_COLUMNS = `u.id, u.username, u.email, u.password_hash, u.created_at,
+  EXISTS (SELECT 1 FROM recommendation_preferences p WHERE p.user_id = u.id) AS onboarding_completed`;
 
 function toUserRecord(row: UserRow): UserRecord {
   return {
@@ -23,6 +30,7 @@ function toUserRecord(row: UserRow): UserRecord {
     email: row.email,
     passwordHash: row.password_hash,
     createdAt: row.created_at,
+    onboardingCompleted: row.onboarding_completed,
   };
 }
 
@@ -35,7 +43,7 @@ export async function createUser(input: {
   const result = await pool.query<UserRow>(
     `INSERT INTO users (username, email, password_hash)
      VALUES ($1, $2, $3)
-     RETURNING id, username, email, password_hash, created_at`,
+     RETURNING id, username, email, password_hash, created_at, false AS onboarding_completed`,
     [input.username, input.email, input.passwordHash],
   );
   const row = result.rows[0];
@@ -45,9 +53,9 @@ export async function createUser(input: {
 
 export async function findUserById(id: string): Promise<UserRecord | null> {
   const result = await pool.query<UserRow>(
-    `SELECT id, username, email, password_hash, created_at
-     FROM users
-     WHERE id = $1`,
+    `SELECT ${USER_COLUMNS}
+     FROM users u
+     WHERE u.id = $1`,
     [id],
   );
   const row = result.rows[0];
@@ -58,9 +66,9 @@ export async function findUserByEmail(
   email: string,
 ): Promise<UserRecord | null> {
   const result = await pool.query<UserRow>(
-    `SELECT id, username, email, password_hash, created_at
-     FROM users
-     WHERE email = $1`,
+    `SELECT ${USER_COLUMNS}
+     FROM users u
+     WHERE u.email = $1`,
     [email],
   );
   const row = result.rows[0];

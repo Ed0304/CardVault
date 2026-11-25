@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { COMMUNITY_PAGE_SIZE } from '~/composables/useCommunity'
 
+// Guests may browse and search published cards (REQ-DISC-001).
+definePageMeta({ public: true })
+
+const { isAuthenticated } = useAuth()
 const route = useRoute()
 const { cards, total, isLoading, error, fetchCards } = useCommunity()
 
@@ -77,7 +81,8 @@ const goToPage = (n: number) =>
         description="When members publish cards, they appear here. You can publish one of yours from its page in your vault."
         icon="globe"
       >
-        <CommonAppButton to="/catalog" variant="secondary">Go to My Vault</CommonAppButton>
+        <CommonAppButton v-if="isAuthenticated" to="/catalog" variant="secondary">Go to My Vault</CommonAppButton>
+        <CommonAppButton v-else to="/register" variant="secondary">Create an account to catalog your own</CommonAppButton>
       </CommonEmptyState>
 
       <nav v-if="!isLoading && !error && pageCount > 1" class="community__pager" aria-label="Pages">

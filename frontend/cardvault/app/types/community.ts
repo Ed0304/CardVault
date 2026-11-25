@@ -24,9 +24,10 @@ export interface PublicCard extends PublicCardSummary {
   aiRelated: RelatedConceptLink[]
   /** The original text, or null when the author did not share it. */
   sourceText: string | null
+  /** What the signed-in viewer can do with the card; null for a guest. */
   viewer: {
     isOwner: boolean
     /** The viewer's own saved copy of this card, if any. */
     savedCardId: string | null
-  }
+  } | null
 }

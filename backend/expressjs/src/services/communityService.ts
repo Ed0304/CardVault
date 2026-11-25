@@ -48,12 +48,12 @@ export interface PublicCardDetail extends PublicCardSummary {
   aiRelated: RelatedConceptLink[];
   /** The original text, or null when the author did not share it. */
   sourceText: string | null;
-  /** Facts about the signed-in viewer, so the UI can offer the right action. */
+  /** Facts about the signed-in viewer, so the UI can offer the right action; null for a guest. */
   viewer: {
     isOwner: boolean;
     /** The viewer's saved copy of this card, if they have one. */
     savedCardId: string | null;
-  };
+  } | null;
 }
 
 export interface PublicCardPage {
@@ -65,17 +65,17 @@ export interface PublicCardPage {
 
 // The approved public fields. source_text is deliberately absent: it is selected separately and
 // only when share_source_text is true.
-const PUBLIC_COLUMNS = `
+export const PUBLIC_COLUMNS = `
   c.id, c.catalog_title, c.source_title, c.source_url, c.ai_summary, c.ai_subjects, c.ai_keywords,
   c.published_at,
   (c.share_source_text AND c.source_text <> '') AS has_source_text,
   u.username AS author_username`;
 
-const FROM_PUBLIC = `
+export const FROM_PUBLIC = `
   FROM knowledge_cards c
   JOIN users u ON u.id = c.user_id`;
 
-interface PublicRow {
+export interface PublicRow {
   id: string;
   catalog_title: string | null;
   source_title: string | null;
@@ -96,7 +96,7 @@ interface PublicDetailRow extends PublicRow {
   saved_card_id: string | null;
 }
 
-function toPublicSummary(row: PublicRow): PublicCardSummary {
+export function toPublicSummary(row: PublicRow): PublicCardSummary {
   return {
     id: row.id,
     catalogTitle: row.catalog_title,
@@ -153,15 +153,18 @@ export async function listPublicCards(query: ListPublicCardsQuery): Promise<Publ
   return { items: rows.rows.map(toPublicSummary), total, page: query.page, pageSize: query.pageSize };
 }
 
-/** One published card, with what the viewer can do with it. */
-export async function getPublicCard(viewerId: string, cardId: string): Promise<PublicCardDetail> {
+/**
+ * One published card, with what the viewer can do with it. A guest (`viewerId` null) gets the
+ * same public fields and `viewer: null`.
+ */
+export async function getPublicCard(viewerId: string | null, cardId: string): Promise<PublicCardDetail> {
   assertCardId(cardId);
   const result = await pool.query<PublicDetailRow>(
     `SELECT ${PUBLIC_COLUMNS}, c.ai_facts, c.ai_related,
             CASE WHEN c.share_source_text THEN c.source_text END AS shared_source_text,
-            (c.user_id = $2) AS is_owner,
+            (c.user_id = $2::uuid) AS is_owner,
             (SELECT s.id FROM knowledge_cards s
-              WHERE s.user_id = $2 AND s.saved_from_card_id = c.id) AS saved_card_id
+              WHERE s.user_id = $2::uuid AND s.saved_from_card_id = c.id) AS saved_card_id
      ${FROM_PUBLIC}
      WHERE c.id = $1 AND c.visibility = 'PUBLIC'`,
     [cardId, viewerId],
@@ -173,7 +176,7 @@ export async function getPublicCard(viewerId: string, cardId: string): Promise<P
     aiFacts: row.ai_facts,
     aiRelated: await linkRelated(row.ai_related, cardId, { publicOnly: true }),
     sourceText: row.has_source_text ? row.shared_source_text : null,
-    viewer: { isOwner: row.is_owner, savedCardId: row.saved_card_id },
+    viewer: viewerId ? { isOwner: row.is_owner, savedCardId: row.saved_card_id } : null,
   };
 }
 

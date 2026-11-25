@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { primaryNavLinks, type NavLink } from '~/utils/navigation'
+import { loginPath, primaryNavLinks, type NavLink } from '~/utils/navigation'
 
 /**
  * "app"  → used with the sidebar layout; inline links are hidden and the
@@ -13,6 +13,10 @@ const route = useRoute()
 
 /** Signed-in-only links show a lock to signed-out visitors; following one leads to login. */
 const isLocked = (link: NavLink) => link.requiresAuth && !isAuthenticated.value
+
+// A guest reading a Community card comes back to it after logging in or registering.
+const loginLink = computed(() => loginPath(route.fullPath))
+const registerLink = computed(() => loginPath(route.fullPath, 'register'))
 
 const menuOpen = ref(false)
 const menuId = `mobile-menu-${useId()}`
@@ -48,12 +52,12 @@ watch(
 
       <div class="site-header__actions">
         <template v-if="isAuthenticated">
-          <span class="site-header__user">{{ user?.username ?? user?.email }}</span>
+          <NuxtLink to="/settings" class="site-header__user" title="Settings">{{ user?.username ?? user?.email }}</NuxtLink>
           <CommonAppButton variant="ghost" size="sm" @click="logout">Log out</CommonAppButton>
         </template>
         <template v-else>
-          <CommonAppButton to="/login" variant="ghost" size="sm">Log in</CommonAppButton>
-          <CommonAppButton to="/register" size="sm">Register</CommonAppButton>
+          <CommonAppButton :to="loginLink" variant="ghost" size="sm">Log in</CommonAppButton>
+          <CommonAppButton :to="registerLink" size="sm">Register</CommonAppButton>
         </template>
 
         <button

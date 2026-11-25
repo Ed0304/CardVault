@@ -1,10 +1,22 @@
 <script setup lang="ts">
+import { loginPath } from '~/utils/navigation'
+
+// Guests may read published cards; saving a copy needs an account (REQ-DISC-001, REQ-DISC-002).
+definePageMeta({ public: true })
+
 const route = useRoute()
 const id = computed(() => String(route.params.id))
 
+const { isAuthenticated } = useAuth()
 const { card, isLoading, error, isSaving, saveError, fetchCard, saveCard } = useCommunity()
 
 const justSaved = ref(false)
+// Log in or register, then come back to this card to save it.
+const loginToSave = computed(() => loginPath(route.fullPath))
+const registerToSave = computed(() => loginPath(route.fullPath, 'register'))
+
+// Logging out, or a session ending, changes what the viewer may do: reload the card.
+watch(isAuthenticated, () => fetchCard(id.value))
 
 onMounted(() => fetchCard(id.value))
 watch(id, (value) => {
@@ -42,7 +54,11 @@ const onSave = async () => {
           </span>
         </template>
         <template #actions>
-          <CommonAppButton v-if="card.viewer.isOwner" :to="`/catalog/${card.id}`" variant="secondary">
+          <CommonAppButton v-if="!card.viewer || !isAuthenticated" :to="loginToSave">
+            <CommonAppIcon name="lock" :size="18" />
+            Log in to save to your vault
+          </CommonAppButton>
+          <CommonAppButton v-else-if="card.viewer.isOwner" :to="`/catalog/${card.id}`" variant="secondary">
             <CommonAppIcon name="pencil" :size="18" />
             Your card · Open in vault
           </CommonAppButton>
@@ -58,10 +74,15 @@ const onSave = async () => {
       </CommonPageHeading>
 
       <div class="stack" style="--stack-gap: var(--space-4)">
-        <CommonAppAlert v-if="justSaved && card.viewer.savedCardId" variant="success" title="Saved to your vault">
+        <CommonAppAlert v-if="!card.viewer" variant="info" title="Reading as a guest">
+          Anyone can read published cards. To keep your own editable copy, with private notes,
+          <NuxtLink :to="loginToSave">log in</NuxtLink> or
+          <NuxtLink :to="registerToSave">create a free account</NuxtLink>, and you'll come back here.
+        </CommonAppAlert>
+        <CommonAppAlert v-if="justSaved && card.viewer?.savedCardId" variant="success" title="Saved to your vault">
           Your copy is private and yours to edit. It keeps this card's attribution, and it stays in your
           vault even if the author changes or removes the original.
-          <NuxtLink :to="`/catalog/${card.viewer.savedCardId}`">Open your copy</NuxtLink>
+          <NuxtLink :to="`/catalog/${card.viewer?.savedCardId}`">Open your copy</NuxtLink>
         </CommonAppAlert>
         <CommonAppAlert v-if="saveError" title="Not saved">{{ saveError }}</CommonAppAlert>
       </div>

@@ -60,7 +60,7 @@ export const useCommunity = () => {
     try {
       const copy = await communityService.save(id)
       if (card.value?.id === id) {
-        card.value = { ...card.value, viewer: { ...card.value.viewer, savedCardId: copy.id } }
+        card.value = { ...card.value, viewer: { isOwner: false, ...card.value.viewer, savedCardId: copy.id } }
       }
       return copy
     } catch (e) {

@@ -115,10 +115,10 @@ CardVault has three connected experiences: **My Vault** (the user's own cards, p
   - AC-CAT-011-4: Unpublishing sets `PRIVATE`, `publishedAt: null` and `shareSourceText: false`.
 
 ### REQ-CAT-012: Community Catalog Listing and Search
-- Any signed-in user can list published cards, newest published first, paginated like REQ-CAT-003 (default 20, max 50), with the total.
+- Anyone can list published cards, including guests without an account (Discovery REQ-DISC-001), newest published first, paginated like REQ-CAT-003 (default 20, max 50), with the total.
 - An optional keyword `q` (max 500 characters) matches case-insensitively against the title, summary, subjects and keywords, and against the source text only where the owner shared it. LIKE wildcards in `q` match literally.
 - Private cards never appear and are never counted.
-- Requests without a valid session return 401.
+- Requests without a valid session are answered as for a guest: the same public fields. (Superseded: until the Discovery milestone they returned 401.)
 
 ### REQ-CAT-013: Save to My Vault (Independent Copy)
 - A signed-in user can save a published card into their vault. This creates a new card owned by the saver. It is never a live reference or shared ownership.
@@ -142,7 +142,7 @@ CardVault has three connected experiences: **My Vault** (the user's own cards, p
 - Keyword search (vault and community) also matches the catalog title, fact labels and values, and related-concept names.
 
 ### REQ-CAT-014: Public Card Detail, Attribution and Field Privacy
-- Any signed-in user can open a published card. A private or unknown card returns the same 404, so private cards are not revealed. The owner gets that 404 too through the public endpoint.
+- Anyone, including a guest (Discovery REQ-DISC-001), can open a published card. A guest gets `viewer: null`. A private or unknown card returns the same 404, so private cards are not revealed. The owner gets that 404 too through the public endpoint.
 - Public responses carry only these fields: id, catalog title, source title, source URL, summary, subjects, keywords, whether source text is shared, the source text when shared, the author's username, the publication time, and (detail only) facts, related concepts (linked to published cards only), and whether the viewer owns the card or already has a copy.
 - Public responses never carry personal notes, collections, tags, AI processing statuses, source metadata, owner ids or email addresses. Services select an explicit list of public columns; they never serialize a full card row.
 - A saved copy shows its attribution in the vault (original author, and a link to the original while it is still published). The attribution stays meaningful after the original is unpublished or deleted.
@@ -150,8 +150,8 @@ CardVault has three connected experiences: **My Vault** (the user's own cards, p
 ## Out of Scope
 
 - Collaborative cards: shared ownership, collaborative editing, or copies that stay linked to the original.
-- Public access without an account. The Community Catalog requires sign-in.
-- Social features: likes, comments, followers, reputation, recommendation feeds.
+- Writing without an account. Guests may read the Community Catalog (Discovery spec); creating, saving, editing and publishing need sign-in.
+- Social features: likes, comments, followers, reputation, activity feeds. Personal recommendations are specified separately (Discovery spec) and are not a social feed.
 - Card versioning or edit history.
 - Bulk import or export.
 - Card templates.

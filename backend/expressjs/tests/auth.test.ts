@@ -24,6 +24,7 @@ jest.unstable_mockModule("../src/services/userService.js", () => ({
       email: input.email,
       passwordHash: input.passwordHash,
       createdAt: new Date(),
+      onboardingCompleted: false,
     };
     users.push(user);
     return user;

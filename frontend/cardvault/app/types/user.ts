@@ -3,6 +3,8 @@ export interface User {
   username: string
   email: string
   createdAt?: string
+  /** False until the user chooses interests in the welcome onboarding. */
+  onboardingCompleted: boolean
 }
 
 export interface LoginPayload {

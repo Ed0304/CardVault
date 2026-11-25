@@ -5,6 +5,8 @@ declare module '#app' {
     public?: boolean
     /** The page is for signed-out visitors only (login, register). */
     guestOnly?: boolean
+    /** The welcome onboarding page: signed-in users who have not chosen interests yet. */
+    onboarding?: boolean
   }
 }
 

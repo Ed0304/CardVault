@@ -102,23 +102,24 @@ describeIntegration("Community Catalog (real database)", () => {
   });
 
   describe("authentication", () => {
-    it("rejects community and publishing routes without a session", async () => {
+    it("rejects saving and publishing without a session", async () => {
       const id = crypto.randomUUID();
       const responses = await Promise.all([
-        request(app).get("/api/community/cards"),
-        request(app).get(`/api/community/cards/${id}`),
         request(app).post(`/api/community/cards/${id}/save`),
         request(app).patch(`/api/cards/${id}/visibility`).send({ visibility: "PRIVATE" }),
       ]);
       for (const res of responses) expect(res.status).toBe(401);
     });
 
-    it("does not show a published card to a visitor without a session", async () => {
-      const id = await newCard(alice);
+    // Guest reading is covered in depth by discovery.integration.test.ts (REQ-DISC-001).
+    it("shows a published card to a guest with the public fields and no viewer", async () => {
+      const id = await newCard(alice, { notes: "PRIVATE NOTE" });
       await publish(alice, id);
       const res = await request(app).get(`/api/community/cards/${id}`);
-      expect(res.status).toBe(401);
-      expect(res.body.data).toBeNull();
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body.data).sort()).toEqual(PUBLIC_DETAIL_KEYS);
+      expect(res.body.data.viewer).toBeNull();
+      expect(JSON.stringify(res.body)).not.toContain("PRIVATE NOTE");
     });
   });
 

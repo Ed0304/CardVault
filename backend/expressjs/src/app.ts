@@ -8,6 +8,8 @@ import collectionsRouter from "./routes/collections.routes.js";
 import tagsRouter from "./routes/tags.routes.js";
 import communityRouter from "./routes/community.routes.js";
 import aiRouter from "./routes/ai.routes.js";
+import preferencesRouter from "./routes/preferences.routes.js";
+import recommendationsRouter from "./routes/recommendations.routes.js";
 import { MAX_SOURCE_TEXT_LENGTH } from "./schemas/cards.schemas.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
@@ -39,6 +41,8 @@ app.use("/api/collections", collectionsRouter);
 app.use("/api/tags", tagsRouter);
 app.use("/api/community", communityRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/preferences", preferencesRouter);
+app.use("/api/recommendations", recommendationsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
