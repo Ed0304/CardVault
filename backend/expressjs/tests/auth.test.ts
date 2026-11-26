@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import argon2 from "argon2";
 import express from "express";
 import jwt from "jsonwebtoken";
@@ -8,6 +8,8 @@ import type { UserRecord } from "../src/services/userService.js";
 // In-memory stand-in for the PostgreSQL-backed user service. It mimics the
 // UNIQUE(email) constraint by throwing a pg-style 23505 error.
 const users: UserRecord[] = [];
+/** When set, the next createUser call rejects with this error (then it is cleared). */
+const failNextCreate: { error: unknown } = { error: null };
 
 jest.unstable_mockModule("../src/services/userService.js", () => ({
   createUser: async (input: {
@@ -15,11 +17,24 @@ jest.unstable_mockModule("../src/services/userService.js", () => ({
     email: string;
     passwordHash: string;
   }): Promise<UserRecord> => {
+    if (failNextCreate.error) {
+      const error = failNextCreate.error;
+      failNextCreate.error = null;
+      throw error;
+    }
     if (users.some((u) => u.email === input.email)) {
-      throw Object.assign(new Error("duplicate key"), { code: "23505", constraint: "users_email_key" });
+      throw Object.assign(new Error("duplicate key"), {
+        code: "23505",
+        constraint: "users_email_key",
+        detail: `Key (email)=(${input.email}) already exists.`,
+      });
     }
     if (users.some((u) => u.username.toLowerCase() === input.username.toLowerCase())) {
-      throw Object.assign(new Error("duplicate key"), { code: "23505", constraint: "users_username_lower_key" });
+      throw Object.assign(new Error("duplicate key"), {
+        code: "23505",
+        constraint: "users_username_lower_key",
+        detail: `Key (lower(username::text))=(${input.username.toLowerCase()}) already exists.`,
+      });
     }
     const user: UserRecord = {
       id: crypto.randomUUID(),
@@ -68,6 +83,10 @@ const validUser = {
 
 beforeEach(() => {
   users.length = 0;
+});
+
+afterEach(() => {
+  failNextCreate.error = null;
 });
 
 /** Returns the auth Set-Cookie header, or undefined if the response has none. */
@@ -176,6 +195,27 @@ describe("POST /api/auth/register", () => {
     });
     expect(authCookie(res)).toBeUndefined();
     expect(users).toHaveLength(1);
+  });
+
+  describe("which field a unique violation names", () => {
+    // Shapes of real PostgreSQL errors, with constraint and detail as pg reports them.
+    const cases: [string, Record<string, string>, string][] = [
+      ["the migration 009 index", { constraint: "users_username_lower_key", detail: "Key (lower(username::text))=(example) already exists." }, "USERNAME_TAKEN"],
+      ["a username rule under another name", { constraint: "users_username_key", detail: "Key (username)=(example) already exists." }, "USERNAME_TAKEN"],
+      ["a username rule named only in the detail", { constraint: "users_uq_2", detail: "Key (username)=(example) already exists." }, "USERNAME_TAKEN"],
+      ["the email constraint", { constraint: "users_email_key", detail: "Key (email)=(example@email.com) already exists." }, "EMAIL_ALREADY_REGISTERED"],
+      ["an unrecognised rule", { constraint: "users_mystery_key", detail: "Key (id)=(x) already exists." }, "ACCOUNT_CONFLICT"],
+    ];
+
+    it.each(cases)("maps %s", async (_label, fields, code) => {
+      failNextCreate.error = Object.assign(new Error("duplicate key"), { code: "23505", ...fields });
+      const res = await request(app).post("/api/auth/register").send(validUser);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe(code);
+      expect(authCookie(res)).toBeUndefined();
+      // Never claim the email is taken for a username clash.
+      if (code === "USERNAME_TAKEN") expect(res.body.message).not.toMatch(/email/i);
+    });
   });
 
   it("keeps the username's spelling as typed", async () => {

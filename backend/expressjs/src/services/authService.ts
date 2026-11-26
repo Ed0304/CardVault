@@ -31,13 +31,22 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-/** The case-insensitive username index from migration 009. */
-const USERNAME_UNIQUE_INDEX = "users_username_lower_key";
+const stringField = (err: unknown, name: "constraint" | "detail"): string =>
+  typeof err === "object" && err !== null && name in err && typeof (err as Record<string, unknown>)[name] === "string"
+    ? ((err as Record<string, unknown>)[name] as string)
+    : "";
 
-function violatedConstraint(err: unknown): string | undefined {
-  return typeof err === "object" && err !== null && "constraint" in err && typeof err.constraint === "string"
-    ? err.constraint
-    : undefined;
+/**
+ * Which column a unique violation on `users` was about. PostgreSQL names the violated constraint
+ * or index ("users_email_key", "users_username_lower_key") and the key in the detail, e.g.
+ * "Key (lower(username::text))=(alice) already exists." Both are checked, so a username rule
+ * added under another name is still recognised, and anything else is not mistaken for email.
+ */
+function conflictingField(err: unknown): "email" | "username" | null {
+  const text = `${stringField(err, "constraint")} ${stringField(err, "detail")}`.toLowerCase();
+  if (text.includes("username")) return "username";
+  if (text.includes("email")) return "email";
+  return null;
 }
 
 // Explicit allow-list so the password hash can never leak into a response.
@@ -81,18 +90,23 @@ export async function registerUser(input: RegisterInput): Promise<AuthResult> {
   } catch (err) {
     // The UNIQUE constraints are the source of truth, so concurrent
     // registrations with the same email or username cannot both succeed.
-    if (isUniqueViolation(err) && violatedConstraint(err) === USERNAME_UNIQUE_INDEX) {
-      // Usernames are public (shown as card authors), so saying one is taken reveals nothing new.
-      throw new AppError(409, "USERNAME_TAKEN", "That username is already taken. Please choose another.", [
-        { field: "username", message: "is already taken" },
-      ]);
-    }
     if (isUniqueViolation(err)) {
-      throw new AppError(
-        409,
-        "EMAIL_ALREADY_REGISTERED",
-        "An account with this email already exists",
-      );
+      const field = conflictingField(err);
+      if (field === "username") {
+        // Usernames are public (shown as card authors), so saying one is taken reveals nothing new.
+        throw new AppError(409, "USERNAME_TAKEN", "That username is already taken. Please choose another.", [
+          { field: "username", message: "is already taken" },
+        ]);
+      }
+      if (field === "email") {
+        throw new AppError(
+          409,
+          "EMAIL_ALREADY_REGISTERED",
+          "An account with this email already exists",
+        );
+      }
+      // An unknown unique rule: don't guess which field it was.
+      throw new AppError(409, "ACCOUNT_CONFLICT", "An account with these details already exists. Please change your username or email.");
     }
     throw err;
   }

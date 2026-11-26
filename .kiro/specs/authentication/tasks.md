@@ -28,6 +28,9 @@
   - `migrations/009_unique_username.sql` adds a unique index on `lower(username)`. If duplicates already exist, it stops with an error and changes nothing.
   - `authService.registerUser` answers 409 `USERNAME_TAKEN` for that index and keeps `EMAIL_ALREADY_REGISTERED` for the email constraint.
   - Applied to `cardvault_test` only. Verified on 2026-11-25 by 2 unit tests, 5 integration tests (`tests/registration.integration.test.ts`, including a simultaneous-registration race) and the full Express suite, 357/357.
+  - Follow-up, 2026-11-25. Each unique violation is now mapped by the column PostgreSQL names in its error (constraint name or detail), not by one index name. A username rule under any name gives `USERNAME_TAKEN`, and an unrecognised rule gives a neutral 409 `ACCOUNT_CONFLICT` instead of the email message.
+    - Reported by the project owner: a duplicate username with a new email showed "email already exists".
+    - Verified by 5 more unit tests and the full suite, 362/362.
 - [ ] **TASK-AUTH-028** Resolve existing duplicate usernames, then run migration 009 on each database. Needs the project owner: renaming accounts is a data decision.
   - The local development database has 2 usernames shared by 6 accounts (read-only check, 2026-11-25).
   - Railway was not checked.
