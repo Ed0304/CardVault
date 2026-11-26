@@ -86,12 +86,38 @@ The candidate query selects only `PUBLIC_COLUMNS` of `visibility = 'PUBLIC'` car
 ### D-DISC-7: No new content policy
 CardVault has no content classification. Recommendations use the same visibility rule as the Community Catalog and no keyword blacklist. A future classification column would be added to the eligibility WHERE clause in `recommendationService.ts` and to the community queries together.
 
+### D-DISC-8: Guest rate limit on Community reads (TASK-DISC-022)
+**Covered:** `GET /api/community/cards` and `GET /api/community/cards/:id` only. Guests get `GUEST_COMMUNITY_RATE_LIMIT` requests (default 120) per client IP per `GUEST_COMMUNITY_RATE_WINDOW_SECONDS` (default 60), with one allowance shared by both routes. 120 a minute is far above human browsing but stops bulk scraping.
+
+**Not covered:** `POST /api/community/cards/:id/save`, which needs sign-in, and every other route.
+
+**Signed-in readers:** `guestRateLimit` runs after `optionalAuthenticate`. A request with a valid session passes uncounted. A missing, invalid or expired cookie counts as a guest, so a forged cookie cannot skip the limit.
+
+**Response:** 429 `GUEST_RATE_LIMITED` with `Retry-After`, through the existing error handler and envelope. Guest responses carry `RateLimit-Policy`, `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset`.
+
+**Client IP:** `req.ip`, controlled by `TRUST_PROXY_HOPS` (Express `trust proxy`).
+- The default 0 uses the connecting address and ignores `X-Forwarded-For`, so a client cannot choose its own IP. This is correct locally, where nothing sits in front of Express.
+- On Railway set 1. Express then takes the rightmost `X-Forwarded-For` entry, the one the last proxy added.
+- With the Nuxt `/api` proxy, the chain is browser → Railway edge → Nuxt → Express (private network). h3's `proxyRequest` forwards the edge's `X-Forwarded-For` unchanged and adds nothing, so 1 is also right there.
+- If the browser calls Express directly, the edge is the one hop.
+- Railway staff answers differ on whether the edge overwrites or appends to a client-supplied `X-Forwarded-For` ([1](https://station.railway.com/questions/express-trust-proxy-1-can-railway-in-66578809), [2](https://station.railway.com/questions/security-critical-questions-on-edge-prox-8fddd775)). Either way, the rightmost entry is the one the edge wrote, so hop count 1 is safe in both cases. A unit test checks that prepended addresses are ignored.
+- In production with 0, the server logs a warning at startup: every guest would share the proxy's address and one allowance.
+
+**Configuration:** invalid values stop the server at startup, like every other variable in `config.ts`.
+
+**Storage:** the existing in-memory fixed window (`lib/rateLimit.ts`), with no Redis and no table. Counts reset on restart and are per instance, which fits CardVault's single Express service on Railway. If Express is ever scaled to several instances, each counts separately, so the effective limit is multiplied by the instance count. A shared store would be justified only then.
+
+**Memory:** expired windows are swept at most once per window, and an expired key is treated as new when it is next looked up.
+
+Alternative rejected: the `express-rate-limit` package. The project already has a limiter, and its in-memory store would have the same limits.
+
 ## Testing
 
 | Area | File |
 |---|---|
 | Ranking rules (28 tests, no database) | `tests/recommendationRanking.test.ts` |
-| Guest access, onboarding, preferences, recommendations (21 tests) | `tests/discovery.integration.test.ts` |
+| Guest access, onboarding, preferences, recommendations, guest rate limit on the real routes (24 tests) | `tests/discovery.integration.test.ts` |
+| Guest rate limit: proxy and client-IP handling, signed-in bypass, headers, configuration (17 tests, no database) | `tests/guestRateLimit.test.ts` |
 | Guest detail replaces the old "401 for guests" test | `tests/community.integration.test.ts` |
 | Auth mock gains `onboardingCompleted` | `tests/auth.test.ts` |
 

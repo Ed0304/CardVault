@@ -116,6 +116,11 @@ inclusion: always
 - Passwords are hashed with Argon2id. JWTs are signed HS256 with `JWT_SECRET` (min 32 characters) and verified against issuer, audience and expiry.
 - Registration and login must not reveal whether an email address is registered. (Known discrepancy: the current registration endpoint returns 409 for a duplicate email. See the authentication design and TASK-AUTH-022.)
 - Never log sensitive user content, passwords, or tokens.
+- Rate limits are in memory (`lib/rateLimit.ts`) and per instance:
+  - Per user: AI cataloging and URL ingestion.
+  - Per client IP, for guests only: Community Catalog reads, `GUEST_COMMUNITY_RATE_LIMIT` per `GUEST_COMMUNITY_RATE_WINDOW_SECONDS`, 429 `GUEST_RATE_LIMITED`. See discovery design D-DISC-8.
+  - The client IP comes from `req.ip` under `TRUST_PROXY_HOPS`. Keep it 0 locally and set it to 1 on Railway. Never set it above the number of proxies you control.
+  - Login and registration have no rate limit yet.
 
 ## Testing Expectations
 

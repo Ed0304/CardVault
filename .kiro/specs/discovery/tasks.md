@@ -69,4 +69,13 @@ For comparison, the agent's own runs against `cardvault_test` passed 294/294 (TA
   - Examples: "Historical internet" for "Internet history"; "Arts" for "Art"; an interest "Films" for a card "Film".
   - Deferred by the project owner on 2026-11-25.
   - Revisit together with TASK-DISC-021: semantic matching would cover most of these cases without a hand-kept synonym list.
-- [ ] **TASK-DISC-022** Rate-limit guest reads of `/api/community` if public traffic grows (no limiter exists today).
+- [x] **TASK-DISC-022** Rate-limit guest reads of `/api/community` (design D-DISC-8):
+  - `middleware/guestRateLimit.ts` on `GET /api/community/cards` and `GET /api/community/cards/:id`.
+  - Default: 120 guest requests per client IP per 60 s, shared between the two routes.
+  - Signed-in readers are not counted. Over the limit, guests get 429 `GUEST_RATE_LIMITED` with `Retry-After`, and every guest response carries `RateLimit-*` headers.
+  - Config: `GUEST_COMMUNITY_RATE_LIMIT`, `GUEST_COMMUNITY_RATE_WINDOW_SECONDS` and `TRUST_PROXY_HOPS` (default 0). Invalid values stop the server at startup.
+  - In memory, per instance.
+  - Verified on 2026-11-25 by 17 DB-free tests (`tests/guestRateLimit.test.ts`), 3 route tests in `discovery.integration.test.ts`, and the full Express suite, 325/325 against `cardvault_test`.
+- [ ] **TASK-DISC-027** Set `TRUST_PROXY_HOPS=1` on the Railway Express service when deploying TASK-DISC-022. Needs the project owner.
+  - Without it, all guests share one allowance, and the server logs a warning at startup.
+  - After deploying, check once that guests from two networks get separate `RateLimit-Remaining` counts.

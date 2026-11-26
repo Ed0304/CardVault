@@ -1,5 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "@jest/globals";
 import request from "supertest";
+import { config } from "../src/lib/config.js";
+import { guestCommunityRateLimiter } from "../src/middleware/guestRateLimit.js";
 import {
   app,
   as,
@@ -153,6 +155,67 @@ describeIntegration("Guest discovery, onboarding and recommendations (real datab
       // Nothing was saved or changed by those attempts.
       const card = await as(alice).get(`/api/cards/${publicId}`);
       expect(card.body.data).toMatchObject({ visibility: "PUBLIC", notes: "PRIVATE NOTE" });
+    });
+  });
+
+  describe("guest rate limit on Community Catalog reads (TASK-DISC-022)", () => {
+    const limits = config.guestRateLimit as { limit: number; windowSeconds: number };
+    const originalLimit = limits.limit;
+
+    beforeEach(() => {
+      guestCommunityRateLimiter.reset();
+      limits.limit = 3;
+    });
+    afterAll(() => {
+      limits.limit = originalLimit;
+      guestCommunityRateLimiter.reset();
+    });
+
+    it("serves guests below the limit, then answers 429 on listing and detail alike", async () => {
+      const list = await request(app).get(`/api/community/cards?q=${RUN}`);
+      const detail = await request(app).get(`/api/community/cards/${publicId}`);
+      expect([list.status, detail.status]).toEqual([200, 200]);
+      expect(detail.headers["ratelimit-remaining"]).toBe("1");
+      expect((await request(app).get(`/api/community/cards?q=${RUN}`)).status).toBe(200);
+
+      // One allowance covers both endpoints.
+      for (const url of [`/api/community/cards/${publicId}`, "/api/community/cards"]) {
+        const limited = await request(app).get(url);
+        expect(limited.status).toBe(429);
+        expect(limited.body.error.code).toBe("GUEST_RATE_LIMITED");
+        expect(limited.body.data).toBeNull();
+        expect(Number(limited.headers["retry-after"])).toBeGreaterThan(0);
+      }
+    });
+
+    it("does not limit signed-in readers, even after guests from the same address are limited", async () => {
+      for (let i = 0; i < 4; i++) await request(app).get("/api/community/cards");
+      expect((await request(app).get("/api/community/cards")).status).toBe(429);
+      for (let i = 0; i < 5; i++) {
+        const res = await as(bob).get(`/api/community/cards/${publicId}`);
+        expect(res.status).toBe(200);
+        expect(res.headers["ratelimit-limit"]).toBeUndefined();
+      }
+      expect((await as(bob).get(`/api/community/cards?q=${RUN}`)).status).toBe(200);
+    });
+
+    it("leaves login, auth, vault, saving and other routes alone while guests are limited", async () => {
+      for (let i = 0; i < 4; i++) await request(app).get("/api/community/cards");
+      expect((await request(app).get("/api/community/cards")).status).toBe(429);
+
+      const responses = await Promise.all([
+        request(app).post("/api/auth/login").send({ email: "nobody@integration.test", password: "WrongPass123!" }),
+        request(app).get("/api/auth/me"),
+        request(app).post("/api/auth/refresh"),
+        request(app).get("/api/cards"),
+        request(app).post(`/api/community/cards/${publicId}/save`),
+        request(app).get("/api/recommendations"),
+        request(app).get("/"),
+      ]);
+      expect(responses.map((res) => res.status)).toEqual([401, 401, 401, 401, 401, 401, 200]);
+      for (const res of responses) expect(res.headers["ratelimit-limit"]).toBeUndefined();
+      // A signed-in save is not limited either.
+      expect((await as(carol).post(`/api/community/cards/${publicId}/save`)).status).toBe(201);
     });
   });
 

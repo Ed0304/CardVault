@@ -23,6 +23,14 @@ const envSchema = z.object({
   URL_FETCH_MAX_BYTES: z.coerce.number().int().min(10_000).max(20 * 1024 * 1024).default(5 * 1024 * 1024),
   // Pages fetched per user per hour; each one is an outbound request made by CardVault.
   URL_INGEST_HOURLY_LIMIT: z.coerce.number().int().min(1).max(1_000).default(30),
+  // Guest reads of the Community Catalog per client IP per window (TASK-DISC-022). Signed-in
+  // users are not counted.
+  GUEST_COMMUNITY_RATE_LIMIT: z.coerce.number().int().min(1).max(10_000).default(120),
+  GUEST_COMMUNITY_RATE_WINDOW_SECONDS: z.coerce.number().int().min(1).max(3_600).default(60),
+  // How many reverse proxies in front of Express to trust for the client IP (X-Forwarded-For).
+  // 0 (default) uses the connecting address and ignores forwarded headers, so a client cannot
+  // choose its own IP. On Railway, set 1: see .env.example.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
 }).refine(
   (env) => Boolean(env.AI_SERVICE_URL) === Boolean(env.AI_SERVICE_TOKEN),
   { message: "set both or neither", path: ["AI_SERVICE_URL"] },
@@ -73,4 +81,11 @@ export const config = {
     hourlyLimit: parsed.data.URL_INGEST_HOURLY_LIMIT,
     maxRedirects: 3,
   },
+  guestRateLimit: {
+    /** Guest Community Catalog reads allowed per client IP in each window. */
+    limit: parsed.data.GUEST_COMMUNITY_RATE_LIMIT,
+    windowSeconds: parsed.data.GUEST_COMMUNITY_RATE_WINDOW_SECONDS,
+  },
+  /** Express "trust proxy" hop count; decides how req.ip is worked out. */
+  trustProxyHops: parsed.data.TRUST_PROXY_HOPS,
 } as const;

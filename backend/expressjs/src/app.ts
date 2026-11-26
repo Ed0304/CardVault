@@ -12,8 +12,13 @@ import preferencesRouter from "./routes/preferences.routes.js";
 import recommendationsRouter from "./routes/recommendations.routes.js";
 import { MAX_SOURCE_TEXT_LENGTH } from "./schemas/cards.schemas.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { config } from "./lib/config.js";
 
 const app = express();
+
+// Number of trusted reverse proxies, so req.ip is the client's address (TRUST_PROXY_HOPS, default
+// 0: forwarded headers are ignored). Only the guest rate limiter reads req.ip.
+app.set("trust proxy", config.trustProxyHops);
 
 app.use(helmet());
 
