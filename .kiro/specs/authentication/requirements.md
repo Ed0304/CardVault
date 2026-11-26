@@ -9,6 +9,7 @@ CardVault requires user accounts to enforce data isolation. Each user's knowledg
 ### REQ-AUTH-001: User Registration
 - A new user can register with a username, an email address and a password.
 - Username is 3–100 characters (letters, numbers, `_`, `.`, `-`).
+- Username is unique across all accounts, ignoring letter case ("Alice" and "alice" are the same name). It is kept as typed for display. A taken username returns 409 `USERNAME_TAKEN`. Usernames are public (shown as card authors), so this reveals nothing private. Implemented by migration 009 (TASK-AUTH-027).
 - Email must be a valid format and unique across all accounts.
 - Password must meet a minimum length of 8 characters.
 - Passwords are stored as Argon2id hashes — never as plaintext.

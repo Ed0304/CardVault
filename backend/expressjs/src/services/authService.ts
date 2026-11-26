@@ -31,6 +31,15 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
+/** The case-insensitive username index from migration 009. */
+const USERNAME_UNIQUE_INDEX = "users_username_lower_key";
+
+function violatedConstraint(err: unknown): string | undefined {
+  return typeof err === "object" && err !== null && "constraint" in err && typeof err.constraint === "string"
+    ? err.constraint
+    : undefined;
+}
+
 // Explicit allow-list so the password hash can never leak into a response.
 function toPublicUser(user: UserRecord): PublicUser {
   return {
@@ -70,8 +79,14 @@ export async function registerUser(input: RegisterInput): Promise<AuthResult> {
       passwordHash,
     });
   } catch (err) {
-    // The UNIQUE constraint is the source of truth, so concurrent
-    // registrations with the same email cannot both succeed.
+    // The UNIQUE constraints are the source of truth, so concurrent
+    // registrations with the same email or username cannot both succeed.
+    if (isUniqueViolation(err) && violatedConstraint(err) === USERNAME_UNIQUE_INDEX) {
+      // Usernames are public (shown as card authors), so saying one is taken reveals nothing new.
+      throw new AppError(409, "USERNAME_TAKEN", "That username is already taken. Please choose another.", [
+        { field: "username", message: "is already taken" },
+      ]);
+    }
     if (isUniqueViolation(err)) {
       throw new AppError(
         409,

@@ -16,7 +16,10 @@ jest.unstable_mockModule("../src/services/userService.js", () => ({
     passwordHash: string;
   }): Promise<UserRecord> => {
     if (users.some((u) => u.email === input.email)) {
-      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+      throw Object.assign(new Error("duplicate key"), { code: "23505", constraint: "users_email_key" });
+    }
+    if (users.some((u) => u.username.toLowerCase() === input.username.toLowerCase())) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505", constraint: "users_username_lower_key" });
     }
     const user: UserRecord = {
       id: crypto.randomUUID(),
@@ -157,6 +160,28 @@ describe("POST /api/auth/register", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("EMAIL_ALREADY_REGISTERED");
+  });
+
+  it("rejects a username that is already taken, ignoring case, without a session", async () => {
+    await request(app).post("/api/auth/register").send(validUser);
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send({ ...validUser, username: "  EXAMPLE ", email: "other@email.com" });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      data: null,
+      error: { code: "USERNAME_TAKEN", details: [{ field: "username", message: "is already taken" }] },
+      message: "That username is already taken. Please choose another.",
+    });
+    expect(authCookie(res)).toBeUndefined();
+    expect(users).toHaveLength(1);
+  });
+
+  it("keeps the username's spelling as typed", async () => {
+    const res = await request(app).post("/api/auth/register").send({ ...validUser, username: "Ada.Lovelace" });
+    expect(res.status).toBe(201);
+    expect(res.body.data.user.username).toBe("Ada.Lovelace");
   });
 
   it("stores an Argon2id hash, never the plaintext password", async () => {

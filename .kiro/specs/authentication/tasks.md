@@ -16,6 +16,23 @@
 - [x] **TASK-AUTH-012** `backend/expressjs/.env.example` documenting `DATABASE_URL`, `JWT_SECRET`, `PORT`, `JWT_ISSUER`, `JWT_AUDIENCE`. (`FASTAPI_URL` is added when `aiService` exists.)
 - [x] **TASK-AUTH-021** `tests/auth.test.ts` — Jest + Supertest, 24 tests with the user service mocked. Note: one test currently asserts the 409 behaviour (see TASK-AUTH-023). No test runs against a real PostgreSQL.
 - [ ] **TASK-AUTH-022** Fix duplicate-email registration so it does not reveal that the email is registered (REQ-AUTH-001). Blocked on a decision about the approach (see design D1). Must: never issue a cookie for the existing account; return a response indistinguishable from the normal outcome; handle the unique-violation race the same way; keep hashing before the insert. Remove `EMAIL_ALREADY_REGISTERED` from the register path. Touches `authService.ts`, `authController.ts`.
+- [x] **TASK-AUTH-025** Rate-limit login and registration per client IP (design D6):
+  - `src/middleware/authRateLimit.ts`, mounted after validation on `POST /api/auth/login` and `POST /api/auth/register`.
+  - Failed logins are limited per IP and per IP plus salted email digest. Successful logins give their attempt back. Every registration attempt counts.
+  - Over a limit: 429 `AUTH_RATE_LIMITED` with `Retry-After`. Configured by `AUTH_*` variables, validated at startup.
+  - The login page shows the 429 message.
+  - Verified on 2026-11-25 by 25 DB-free tests (`tests/authRateLimit.test.ts`) and the full Express suite, 350/350 against `cardvault_test`.
+  - Does not address the duplicate-email 409 (TASK-AUTH-022), though it slows how fast that can be probed.
+- [ ] **TASK-AUTH-026** When deploying TASK-AUTH-025, confirm `TRUST_PROXY_HOPS=1` is set on the Railway Express service (as for TASK-DISC-027). Otherwise every visitor shares one login and registration allowance.
+- [x] **TASK-AUTH-027** Unique usernames, ignoring case:
+  - `migrations/009_unique_username.sql` adds a unique index on `lower(username)`. If duplicates already exist, it stops with an error and changes nothing.
+  - `authService.registerUser` answers 409 `USERNAME_TAKEN` for that index and keeps `EMAIL_ALREADY_REGISTERED` for the email constraint.
+  - Applied to `cardvault_test` only. Verified on 2026-11-25 by 2 unit tests, 5 integration tests (`tests/registration.integration.test.ts`, including a simultaneous-registration race) and the full Express suite, 357/357.
+- [ ] **TASK-AUTH-028** Resolve existing duplicate usernames, then run migration 009 on each database. Needs the project owner: renaming accounts is a data decision.
+  - The local development database has 2 usernames shared by 6 accounts (read-only check, 2026-11-25).
+  - Railway was not checked.
+  - The query to find duplicates is at the top of the migration.
+  - Deploy the Express change after 009 has run. Until then, a duplicate username is still accepted, and is answered with the email message only if the email is also taken.
 - [ ] **TASK-AUTH-023** Update `tests/auth.test.ts`: replace "rejects a duplicate email with 409" with a test of the corrected behaviour, including that no auth cookie is issued for an existing account. Depends on TASK-AUTH-022.
 - [ ] **TASK-AUTH-024** Update `app/pages/register.vue` (and `useAuth` register flow if the success path changes) to match the corrected registration behaviour. Depends on TASK-AUTH-022.
 
