@@ -117,11 +117,11 @@ const onSave = async () => {
             </span>
           </p>
 
-          <p v-if="card.sourceText" class="detail-original">{{ card.sourceText }}</p>
-          <p v-else class="text-muted">
-            The author shared this card's catalog details but not its original text.
-            <template v-if="card.sourceUrl">Follow the source link to read it.</template>
-          </p>
+          <CatalogSourceText
+            :text="card.sourceText"
+            :source-url="card.sourceUrl"
+            unavailable-reason="The author shared this card's catalog entry but not its source text."
+          />
         </section>
       </div>
     </article>
@@ -189,13 +189,5 @@ const onSave = async () => {
 }
 .detail-source :deep(.app-icon) {
   margin-top: 0.2rem;
-}
-.detail-original {
-  max-width: 68ch;
-  font-family: var(--font-heading);
-  font-size: var(--text-lg);
-  line-height: var(--leading-relaxed);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 </style>

@@ -10,19 +10,21 @@ withDefaults(
   { compact: false },
 )
 
-// The status describes the latest AI cataloging request, which the owner starts.
+// The status describes the owner's latest request to Muse, not who wrote the saved entry:
+// COMPLETE stays after the owner discards the suggestions, and NOT_AVAILABLE covers entries
+// written by hand.
 const labels: Record<AiStatus, string> = {
-  PENDING: 'Muse is cataloging this card…',
-  COMPLETE: 'Cataloged with Muse',
-  FAILED: 'The last AI cataloging attempt failed. Your card is unchanged.',
-  NOT_AVAILABLE: 'Not cataloged by AI yet. You can add catalog details yourself.',
+  PENDING: 'Muse is drafting suggestions…',
+  COMPLETE: 'Muse has made suggestions for this card.',
+  FAILED: "Muse's last attempt failed. Your card is unchanged.",
+  NOT_AVAILABLE: "Muse hasn't been asked to catalog this card.",
 }
 
 const compactLabels: Record<AiStatus, string> = {
-  PENDING: 'Cataloging',
-  COMPLETE: 'AI cataloged',
-  FAILED: 'AI failed',
-  NOT_AVAILABLE: 'Not cataloged',
+  PENDING: 'Muse drafting',
+  COMPLETE: 'Muse suggested',
+  FAILED: 'Muse failed',
+  NOT_AVAILABLE: 'Muse not asked',
 }
 </script>
 

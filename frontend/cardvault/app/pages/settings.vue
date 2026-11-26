@@ -13,7 +13,7 @@ onMounted(load)
 const onSubmit = async (payload: SavePreferencesPayload) => {
   notice.value = null
   if (await save(payload)) {
-    notice.value = 'Saved. Your next recommendations will use these choices.'
+    notice.value = 'Saved. Home will use these choices from your next visit.'
     formKey.value++
   }
 }
@@ -35,6 +35,13 @@ const onSubmit = async (payload: SavePreferencesPayload) => {
           <h2 id="interests-heading" class="settings__title">Your interests</h2>
         </div>
       </header>
+
+      <p class="settings__text">
+        Home picks published cards from your topics, from cards related to your vault, and from a
+        few topics you haven't chosen. Changes apply when you press “Save preferences”, starting
+        with your next visit to Home. Only you can see these choices; they never appear on cards
+        you publish.
+      </p>
 
       <CommonAppAlert v-if="notice" variant="success">{{ notice }}</CommonAppAlert>
       <CommonLoadingState v-if="isLoading" label="Loading your preferences…" />
@@ -81,5 +88,10 @@ const onSubmit = async (payload: SavePreferencesPayload) => {
 }
 .settings__title {
   font-size: var(--text-xl);
+}
+.settings__text {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
 }
 </style>

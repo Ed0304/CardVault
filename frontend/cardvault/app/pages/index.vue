@@ -12,12 +12,12 @@ const steps = [
   {
     number: '02',
     title: 'Catalog',
-    text: 'AI drafts a catalog entry: title, description, facts, subject headings and related concepts. You review and edit all of it.',
+    text: 'Give each card a catalog entry: title, description, facts, subject headings, keywords and related concepts. Write it yourself, or ask Muse to draft it and review every suggestion before saving.',
   },
   {
     number: '03',
-    title: 'Rediscover',
-    text: 'Search by keyword or by meaning, and find related cards from your own vault.',
+    title: 'Rediscover and share',
+    text: 'Shelve cards in collections and tags, search your vault by keyword, and follow related concepts. Cards are private; publish one to the Community Catalog if you choose.',
   },
 ]
 
@@ -37,8 +37,8 @@ const layers = [
   {
     key: 'ai',
     icon: 'sparkle',
-    title: 'AI catalog',
-    text: 'A titled catalog entry in its own words: description, facts, subject headings, keywords and related concepts. It never overwrites your original or your notes.',
+    title: 'Catalog entry',
+    text: 'A titled entry describing the source: description, facts, subject headings, keywords and related concepts. Muse can suggest it when you ask; you review and save it. It never overwrites your original or your notes.',
   },
 ] as const
 </script>
@@ -54,8 +54,9 @@ const layers = [
           Save information once. Let CardVault organize it and help you rediscover it.
         </p>
         <p class="hero__support">
-          A private catalog for the things worth keeping: preserved as you saved them, cataloged
-          by AI, and found again by meaning.
+          A private catalog for the things worth keeping: each source preserved as you saved it,
+          described by a catalog entry you review, with AI suggestions when you ask, and connected
+          so you can find it again.
         </p>
         <div class="hero__actions">
           <CommonAppButton v-if="isAuthenticated" to="/home">
@@ -89,7 +90,7 @@ const layers = [
           <span class="art-line art-line--short" />
         </div>
         <div class="art-card art-card--front">
-          <span class="mono">AI CATALOG</span>
+          <span class="mono">CATALOG ENTRY</span>
           <span class="art-title" />
           <span class="art-line" />
           <span class="art-line" />
@@ -116,8 +117,8 @@ const layers = [
       <div class="section__intro">
         <h2 id="layers-title" class="section__title">Every card keeps three layers apart</h2>
         <p class="section__lead">
-          What you saved, what you think, and what AI suggests are stored separately, so nothing
-          is silently overwritten.
+          What you saved, what you think, and how the card is cataloged are stored separately, so
+          nothing is silently overwritten.
         </p>
       </div>
       <ul class="layers">

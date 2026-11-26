@@ -148,14 +148,15 @@ const identity = computed(() => {
               This page was very long, so only its first 100,000 characters were saved.
             </CommonAppAlert>
 
-            <p v-if="card.sourceText" class="detail-original">{{ card.sourceText }}</p>
-            <p v-else class="text-muted">
-              {{
+            <CatalogSourceText
+              :text="card.sourceText"
+              :source-url="card.sourceUrl"
+              :unavailable-reason="
                 card.savedFrom
-                  ? "The original author didn't share the source text. Follow the source link to read it."
-                  : 'No source text.'
-              }}
-            </p>
+                  ? 'The original author shared this card\'s catalog entry but not its source text, so your copy has none.'
+                  : 'No source text was saved with this card.'
+              "
+            />
           </section>
 
         </div>
@@ -163,6 +164,7 @@ const identity = computed(() => {
         <aside class="detail__aside">
           <!-- Personal notes: private, and never sent to AI or published. -->
           <CatalogNotesEditor :key="card.id" :card="card" />
+          <CatalogCardOrganisation :card="card" />
           <CatalogCardPublishing :card="card" />
         </aside>
       </div>
@@ -270,7 +272,7 @@ const identity = computed(() => {
 .detail-meta {
   display: grid;
   gap: var(--space-2) var(--space-6);
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   margin: 0;
   padding: var(--space-3) var(--space-4);
   background: var(--bg-sunken);
@@ -282,27 +284,14 @@ const identity = computed(() => {
   overflow-wrap: anywhere;
 }
 
-/* Long-form reading text: serif, generous leading, capped measure */
-.detail-original {
-  max-width: 68ch;
-  font-family: var(--font-heading);
-  font-size: var(--text-lg);
-  line-height: var(--leading-relaxed);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 
 @media (min-width: 64rem) {
   .detail__grid {
     grid-template-columns: minmax(0, 1fr) 21rem;
     gap: var(--space-8);
   }
-  .detail__aside {
-    position: sticky;
-    top: calc(var(--header-height) + var(--space-6));
-    /* The aside holds two panels; keep all of it reachable while it sticks. */
-    max-height: calc(100vh - var(--header-height) - var(--space-12));
-    overflow-y: auto;
-  }
+  /* The aside now holds three panels (notes, collection and tags, publishing). It scrolls with
+     the page: a sticky, height-capped column cut panels off and hid controls behind an inner
+     scrollbar. */
 }
 </style>

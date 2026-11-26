@@ -41,6 +41,12 @@ const hasDetails = computed(
 )
 const modelLabel = computed(() => (draft.value ? museModelName(draft.value.model) : ''))
 
+/** Where the saved entry comes from. Saved entries don't record whether Muse drafted them. */
+const entryEyebrow = computed(() => {
+  if (props.card.savedFrom) return `Catalog entry · cataloged by ${props.card.savedFrom.authorUsername}, yours to edit`
+  return hasDetails.value ? 'Catalog entry · saved by you, describes the source' : 'Catalog entry · not written yet'
+})
+
 const onCatalog = async () => {
   notice.value = null
   editing.value = false
@@ -78,6 +84,7 @@ const onSaveEdit = async (payload: Required<UpdateAiMetadataPayload>) => {
     :keywords="card.aiKeywords"
     :related="card.aiRelated"
     :status="cataloging ? 'PENDING' : card.aiCatalogStatus"
+    :eyebrow="entryEyebrow"
   >
     <CommonAppAlert v-if="notice" variant="success">{{ notice }}</CommonAppAlert>
     <CommonAppAlert v-if="error" title="Not cataloged">{{ error }}</CommonAppAlert>
@@ -98,11 +105,17 @@ const onSaveEdit = async (payload: Required<UpdateAiMetadataPayload>) => {
       </CommonAppButton>
     </div>
     <p v-if="aiAvailable && hasSourceText" class="catalog-hint">
-      Muse reads this card's title and original text, never your notes, and drafts a catalog entry
-      in its own words: a title, a short description, facts, subject headings, keywords and related
-      concepts, for you to review.
+      Muse runs only when you press the button. It receives this card's title and source text, and
+      the subject headings you already use (so new ones match), never your notes, collections or
+      tags. Its suggestions come back as a draft for you to review: nothing on the card changes
+      until you save.
     </p>
-    <p v-else-if="aiAvailable === false" class="catalog-hint">AI cataloging isn't set up on this server.</p>
+    <p v-else-if="aiAvailable && !hasSourceText" class="catalog-hint">
+      This card has no source text, so there is nothing for Muse to read. You can add the details yourself.
+    </p>
+    <p v-else-if="aiAvailable === false" class="catalog-hint">
+      AI cataloging isn't set up on this server. You can add the details yourself.
+    </p>
   </AiMetadata>
 
   <!-- Reviewing Muse's suggestions -->

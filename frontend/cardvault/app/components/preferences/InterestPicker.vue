@@ -36,6 +36,19 @@ const customError = ref<string | null>(null)
 const choiceError = ref<string | null>(null)
 
 const key = (label: string) => label.trim().toLowerCase()
+
+/** True when the form differs from what was saved, so Settings can say a save is needed. */
+const isDirty = computed(() => {
+  const initial = props.initial
+  const savedTopics = new Set((initial?.interests ?? []).map(key))
+  const sameTopics =
+    savedTopics.size === selected.value.length && selected.value.every((label) => savedTopics.has(key(label)))
+  return (
+    !sameTopics ||
+    surpriseMe.value !== (initial?.surpriseMe ?? false) ||
+    (props.showPriority && priority.value !== (initial?.priority ?? 'BALANCED'))
+  )
+})
 const isSelected = (label: string) => selected.value.some((s) => key(s) === key(label))
 
 const starterTopics = computed(() => props.topics.filter((t) => t.source === 'STARTER'))
@@ -144,6 +157,11 @@ const PRIORITIES: { value: RecommendationPriority; label: string; hint: string }
           Add
         </CommonAppButton>
       </div>
+      <p class="picker__note">
+        Your own topics can be up to {{ MAX_INTEREST_LENGTH }} characters of plain text. A card
+        matches when all the topic's words appear in one of its subject headings, keywords, title
+        or related concepts, in any order, or when its description contains the exact phrase.
+      </p>
       <ul v-if="ownTopics.length" class="picker__chips" aria-label="Your own topics">
         <li v-for="label in ownTopics" :key="label">
           <button type="button" class="chip" aria-pressed="true" @click="toggle(label)">
@@ -161,7 +179,9 @@ const PRIORITIES: { value: RecommendationPriority; label: string; hint: string }
       <span>
         <strong>Surprise me</strong> — recommend a variety of topics
         <span class="surprise__hint">
-          Adds cards from subjects outside your topics. Choose it on its own if you'd rather not pick.
+          Home always includes at least one card from outside your topics when there is one;
+          Surprise me makes it two. Choose it on its own if you'd rather not pick, and Home shows a
+          variety.
         </span>
       </span>
     </label>
@@ -183,9 +203,14 @@ const PRIORITIES: { value: RecommendationPriority; label: string; hint: string }
     <CommonAppAlert v-if="error">{{ error }}</CommonAppAlert>
 
     <div class="picker__footer">
-      <p class="mono" aria-live="polite">
-        {{ selected.length }} of {{ MAX_INTERESTS }} topics{{ surpriseMe ? ' · Surprise me on' : '' }}
-      </p>
+      <div class="picker__status" aria-live="polite">
+        <p class="mono">
+          {{ selected.length }} of {{ MAX_INTERESTS }} topics{{ surpriseMe ? ' · Surprise me on' : '' }}
+        </p>
+        <p v-if="showPriority" :class="['picker__save-note', { 'picker__save-note--dirty': isDirty }]">
+          {{ isDirty ? 'Unsaved changes. Nothing changes until you save.' : 'All changes saved.' }}
+        </p>
+      </div>
       <CommonAppButton type="submit" :loading="isSaving">{{ submitLabel }}</CommonAppButton>
     </div>
   </form>
@@ -252,11 +277,13 @@ const PRIORITIES: { value: RecommendationPriority; label: string; hint: string }
 }
 .picker__custom {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-2);
 }
 .picker__custom > :first-child {
-  flex: 1;
+  flex: 1 1 14rem;
+  min-width: 0;
 }
 .surprise {
   display: flex;
@@ -302,6 +329,24 @@ const PRIORITIES: { value: RecommendationPriority; label: string; hint: string }
 .priority__option input {
   margin-top: 0.2rem;
   accent-color: var(--color-terracotta-strong);
+}
+.picker__note {
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--text-muted);
+}
+.picker__status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.picker__save-note {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.picker__save-note--dirty {
+  color: var(--warning-text);
+  font-weight: var(--weight-medium);
 }
 .picker__footer {
   display: flex;

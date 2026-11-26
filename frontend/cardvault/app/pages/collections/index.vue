@@ -98,7 +98,7 @@ const onDeleteTag = async (tag: Tag) => {
   <section>
     <CommonPageHeading
       title="Collections and tags"
-      description="Group related cards into collections, and label them with tags, so they are easy to browse together."
+      description="Group related cards into collections, and label them with tags, so they are easy to browse together. Both are private to you: they are never published or copied with a card."
     />
 
     <div class="stack organise" style="--stack-gap: var(--space-10)">
@@ -108,7 +108,7 @@ const onDeleteTag = async (tag: Tag) => {
       <section class="stack" style="--stack-gap: var(--space-4)" aria-labelledby="collections-heading">
         <div class="organise__header">
           <h2 id="collections-heading" class="organise__title">Collections</h2>
-          <p class="organise__hint">A card can be in one collection at a time.</p>
+          <p class="organise__hint">A card can be in one collection at a time. Select a collection to see its cards.</p>
         </div>
 
         <form class="organise__form" @submit.prevent="onCreateCollection">
@@ -131,7 +131,7 @@ const onDeleteTag = async (tag: Tag) => {
         <CommonEmptyState
           v-else-if="collections.length === 0"
           title="No collections yet"
-          description="Create a collection above, then add cards to it from a card's page."
+          description="A collection is a shelf for cards that belong together, such as a project or a reading list. Name one above, then file cards on it from each card's page."
           icon="folder"
         />
         <ul v-else class="organise__grid">
@@ -202,7 +202,7 @@ const onDeleteTag = async (tag: Tag) => {
         <CommonEmptyState
           v-else-if="tags.length === 0"
           title="No tags yet"
-          description="Create a tag above, or add one straight from a card's page."
+          description="Tags are labels that cut across collections, like “to reread” or “history”. Create one above, or type a new one straight on a card's page."
           icon="catalog"
         />
         <ul v-else class="organise__tags" aria-label="Your tags">
@@ -292,8 +292,8 @@ const onDeleteTag = async (tag: Tag) => {
 .tag-chip__remove {
   display: grid;
   place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2rem;
+  height: 2rem;
   margin-right: var(--space-1);
   padding: 0;
   background: transparent;

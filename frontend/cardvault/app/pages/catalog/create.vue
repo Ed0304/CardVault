@@ -37,7 +37,7 @@ const onSubmit = async () => {
   <section>
     <CommonPageHeading
       title="New card"
-      description="Save text or a public web page. CardVault keeps the original, and Muse can suggest its catalog entry."
+      description="Capture a source: paste text, or give the address of a public web page. Saving creates a private card that keeps the source as it is. Its catalog entry comes next, on the card's page."
     />
 
     <div class="create">
@@ -94,7 +94,7 @@ const onSubmit = async () => {
           required
           maxlength="2048"
           placeholder="https://"
-          hint="A public http or https web page. CardVault saves its readable text and details, not the page's HTML. Pages that need a login or JavaScript to show their text can't be read; paste the text instead."
+          hint="A public http or https web page. CardVault reads it once and saves its readable text and details, not the page's HTML. Pages that need a login or JavaScript to show their text, and sites that block automated access, can't be read; paste the text instead."
         />
 
         <CommonAppAlert v-if="error" title="Couldn't save the card">
@@ -121,12 +121,25 @@ const onSubmit = async () => {
           <h2 id="next-title">What happens next</h2>
         </div>
         <ol class="create__steps">
-          <li>Your original content is saved and kept as is. From a URL, CardVault reads the page's text once.</li>
-          <li>On the card, choose “Catalog with Muse” for a suggested catalog entry: title, description, facts, subject headings, keywords and related concepts.</li>
-          <li>You review and edit the suggestions, save them, and add your own notes.</li>
+          <li>
+            <strong>Save.</strong> CardVault stores the source and opens your new card. Pasted text
+            can be up to 100,000 characters; a longer web page keeps its first 100,000. Muse is
+            not involved.
+          </li>
+          <li>
+            <strong>Catalog.</strong> On the card, write its catalog entry yourself, or choose
+            “Catalog with Muse” for suggested details: a title, description, facts, subject
+            headings, keywords and related concepts.
+          </li>
+          <li>
+            <strong>Review.</strong> Muse's suggestions arrive as a draft, marked as AI-generated.
+            Edit them, then save them to the card or discard them. The source itself is never
+            changed.
+          </li>
         </ol>
         <p class="create__aside-note">
-          Cards are private. Nothing is sent to AI until you ask.
+          <CommonAppIcon name="lock" :size="14" />
+          New cards are private to you. Nothing is sent to Muse until you ask on the card's page.
         </p>
       </aside>
     </div>
@@ -232,9 +245,19 @@ const onSubmit = async () => {
   padding-left: var(--space-5);
   color: var(--text-secondary);
 }
+.create__steps strong {
+  color: var(--text-primary);
+}
 .create__aside-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
   font-size: var(--text-sm);
   color: var(--text-muted);
+}
+.create__aside-note :deep(.app-icon) {
+  flex-shrink: 0;
+  margin-top: 0.2rem;
 }
 
 @media (min-width: 64rem) {

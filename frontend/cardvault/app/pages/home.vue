@@ -18,6 +18,10 @@ const today = computed(() => (shelf.value ? formatDate(`${shelf.value.date}T12:0
         <p class="eyebrow">Reading room</p>
         <h1 class="home__title">Welcome, {{ user?.username }}!</h1>
         <p class="home__lead">Your library is ready to explore.</p>
+        <p class="home__support">
+          Save sources as cards, catalog them, and find them again, with connections to what
+          other members have published.
+        </p>
       </div>
       <nav class="home__actions" aria-label="Library actions">
         <CommonAppButton to="/catalog/create">
@@ -72,10 +76,14 @@ const today = computed(() => (shelf.value ? formatDate(`${shelf.value.date}T12:0
       </CommonEmptyState>
 
       <p v-if="shelf?.items.length" class="home__note">
-        Picked from published cards using your interests, the subjects in your vault, and a few
-        topics you haven't chosen yet. Your vault and interests stay private.
+        Picked from cards other members published, matched against your interests, the headings
+        and related concepts on your own cards, and one or two topics you haven't chosen. Picks
+        hold steady through the day and change when you edit your interests or new cards are
+        published. Your vault and interests are never shown to anyone else.
       </p>
     </section>
+
+    <CommonHowItWorks class="home__how" />
   </section>
 </template>
 
@@ -109,6 +117,13 @@ const today = computed(() => (shelf.value ? formatDate(`${shelf.value.date}T12:0
   font-size: var(--text-lg);
   color: var(--text-secondary);
 }
+.home__support {
+  max-width: 52ch;
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+}
 .home__actions {
   display: flex;
   flex-wrap: wrap;
@@ -138,11 +153,16 @@ const today = computed(() => (shelf.value ? formatDate(`${shelf.value.date}T12:0
 .home__grid {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
   list-style: none;
 }
 .home__note {
   font-size: var(--text-xs);
+  line-height: var(--leading-normal);
   color: var(--text-muted);
+}
+.home__how {
+  padding-top: var(--space-6);
+  border-top: var(--border-width) dashed var(--border-default);
 }
 </style>

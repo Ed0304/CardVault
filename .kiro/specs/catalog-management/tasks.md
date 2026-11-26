@@ -31,9 +31,20 @@
 - [x] **TASK-CAT-018** (Done in the Muse milestone, with `AiCatalogPanel.vue` showing the status; verified by the production build only.) Create `app/components/ai/AiMetadataEditor.vue` (beside the existing read-only `AiMetadata.vue`) — editable fields for aiSummary, aiSubjects, aiKeywords with a status badge for each of the two AI statuses (PENDING / COMPLETE / FAILED / NOT_AVAILABLE). Shows metadata whenever it exists.
 - [x] **TASK-CAT-019** Create `app/components/catalog/NotesEditor.vue` — auto-saving textarea for personal notes. (Done: saves 1.2 s after typing stops, on blur and when leaving the card; 20,000-character limit matching the API; warns before closing the tab with unsaved edits. Verified by typecheck and production build, not yet in a browser.)
 - [ ] **TASK-CAT-020** Create `app/components/common/ConfirmDialog.vue` (generic UI primitives live in `components/common/`; there is no `ui/` folder) — modal dialog with confirm/cancel props and emits. The card detail page currently uses `window.confirm`.
-- [ ] **TASK-CAT-021** Extend the existing `app/pages/catalog/index.vue` (the card list page; `app/pages/index.vue` is the landing page) — card list with pagination, filter sidebar (by collection and tag), and search input. The list and the keyword search (`GET /api/cards?q=`, done in the Muse milestone) exist; pagination and the filter sidebar do not.
+- [ ] **TASK-CAT-021** Extend the existing `app/pages/catalog/index.vue` (the card list page; `app/pages/index.vue` is the landing page) — card list with pagination, filter sidebar (by collection and tag), and search input. The list and the keyword search (`GET /api/cards?q=`, done in the Muse milestone) exist; pagination and the filter sidebar do not. (Partial, 2026-11-25: the page now honours `?collectionId=` and `?tagId=` links with a "Show all cards" reset; no sidebar or pagination yet.)
 - [x] **TASK-CAT-022** Extend the existing `app/pages/catalog/create.vue` — tabbed form for "Paste Text" and "From URL" card creation. Both tabs now work (From URL through `POST /api/cards/from-url`, URL Ingestion spec); verified by integration tests and the end-to-end run, not yet in a browser.
-- [ ] **TASK-CAT-023** Extend the existing `app/pages/catalog/[id].vue` — three-panel card detail: source content (read-only), notes editor, AI metadata editor with delete button using `ConfirmDialog`.
+- [ ] **TASK-CAT-023** Extend the existing `app/pages/catalog/[id].vue` — three-panel card detail: source content (read-only), notes editor, AI metadata editor with delete button using `ConfirmDialog`. (Partial, 2026-11-25. The source text collapses past 1,500 characters (`SourceText.vue`), and the page gained a collection and tags panel (`CardOrganisation.vue`). The delete button still uses `window.confirm`, pending TASK-CAT-020.)
+
+## UX Review (2026-11-25)
+
+- [x] **TASK-CAT-040** Make the capture, catalog, connect, share workflow clear, and correct copy that claimed unsupported behaviour:
+  - Landing page: no "search by meaning", and no automatic AI.
+  - Saved catalog entries no longer carry the AI sparkle and "AI-assisted" eyebrow, since CardVault doesn't record whether Muse wrote a saved field.
+  - Status labels: `COMPLETE` means "Muse has made suggestions", and `NOT_AVAILABLE` means "Muse not asked".
+  - The Muse hint now also says that the owner's existing subject headings are sent.
+  - The Collections page's "add from a card's page" and its filter links are now true.
+  - Added `HowItWorks.vue` (Home), a short "what CardVault is" on welcome, an empty-vault example labelled "Example only" (static, no data), clearer New Card steps, "Why it's here" on recommendations, and save-state and topic-matching notes in Settings.
+  - Verified on 2026-11-25 by `vue-tsc`, the production build, and a headless-Chrome check at 375 and 1280 px against `cardvault_test` with throwaway users (31 checks: no horizontal overflow on 9 pages, plus behaviour checks).
 
 ## Community Catalog (REQ-CAT-011 to REQ-CAT-014)
 

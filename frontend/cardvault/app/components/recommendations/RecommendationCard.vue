@@ -21,6 +21,7 @@ const REASON_LABELS: Record<RecommendationReasonKind, string> = {
 }
 
 const card = computed(() => props.item.card)
+const host = computed(() => hostnameOf(card.value.sourceUrl))
 const heading = computed(() => card.value.aiSubjects[0] ?? card.value.aiKeywords[0] ?? null)
 const isDiscovery = computed(() => ['ADJACENT', 'EXPLORE'].includes(props.item.reason.kind))
 </script>
@@ -40,12 +41,20 @@ const isDiscovery = computed(() => ['ADJACENT', 'EXPLORE'].includes(props.item.r
       <h3 class="rcard__title">
         <NuxtLink :to="`/community/${card.id}`" class="rcard__link">{{ displayTitle(card) }}</NuxtLink>
       </h3>
+      <p class="rcard__reason">
+        <span class="rcard__reason-label">Why it's here</span>
+        {{ item.reason.text }}
+      </p>
       <p v-if="card.aiSummary" class="rcard__summary">{{ card.aiSummary }}</p>
       <p v-else class="rcard__summary text-muted">No catalog description yet. Open the card to read more.</p>
     </div>
 
-    <footer class="rcard__reason">
-      <p>{{ item.reason.text }}</p>
+    <footer class="rcard__footer">
+      <span class="rcard__author">
+        <CommonAppIcon name="user" :size="14" />
+        Cataloged by {{ card.author.username }}
+      </span>
+      <span v-if="host" class="rcard__host">{{ host }}</span>
     </footer>
   </article>
 </template>
@@ -109,6 +118,9 @@ const isDiscovery = computed(() => ['ADJACENT', 'EXPLORE'].includes(props.item.r
   font-size: var(--text-xl);
   overflow-wrap: anywhere;
 }
+.rcard__summary {
+  margin-top: var(--space-1);
+}
 /* Stretched link: the whole card opens the public card. */
 .rcard__link {
   color: var(--text-primary);
@@ -136,14 +148,46 @@ const isDiscovery = computed(() => ['ADJACENT', 'EXPLORE'].includes(props.item.r
   line-height: var(--leading-normal);
   color: var(--text-secondary);
 }
+/* The reason sits right under the title, so it can be scanned before the description. */
 .rcard__reason {
-  padding: var(--space-3) var(--card-padding);
+  padding: var(--space-2) var(--space-3);
   background: var(--bg-sunken);
-  border-top: var(--border-width) dashed var(--border-default);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  font-family: var(--font-heading);
-  font-style: italic;
+  border-left: 3px solid var(--color-archive-brown);
+  border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}
+.rcard--discovery .rcard__reason {
+  border-left-color: var(--color-terracotta);
+}
+.rcard__reason-label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.rcard__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-3) var(--card-padding);
+  border-top: var(--border-width) dashed var(--border-default);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+.rcard__author {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.rcard__host {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 </style>

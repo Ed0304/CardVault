@@ -26,10 +26,16 @@ const onSubmit = async (payload: SavePreferencesPayload) => {
         <p class="eyebrow">Your library card · step 1 of 1</p>
         <h1 id="welcome-title" class="welcome__title">Welcome, {{ user?.username }}!</h1>
         <p class="welcome__lead">Let's personalize your CardVault discovery experience.</p>
+        <p class="welcome__about">
+          CardVault is a private catalog for things worth keeping. Each thing you save becomes a
+          card that keeps the original source alongside a catalog entry describing it, which you
+          can write yourself or with Muse's suggestions. Your cards stay private unless you publish
+          one to the Community Catalog.
+        </p>
         <p class="welcome__question">What topics are you interested in?</p>
         <p class="welcome__hint">
-          Pick as many as you like, or let CardVault surprise you. Your choices are private, and you
-          can change them any time in Settings.
+          Your topics decide which published cards Home suggests. Pick up to 20, or let CardVault
+          surprise you. Your choices are private, and you can change them any time in Settings.
         </p>
       </header>
 
@@ -74,6 +80,12 @@ const onSubmit = async (payload: SavePreferencesPayload) => {
 }
 .welcome__lead {
   font-size: var(--text-lg);
+  color: var(--text-secondary);
+}
+.welcome__about {
+  max-width: 60ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   color: var(--text-secondary);
 }
 .welcome__question {

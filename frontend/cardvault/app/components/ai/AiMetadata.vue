@@ -18,6 +18,10 @@ const props = withDefaults(
      * on public cards, which do not expose processing statuses.
      */
     status?: AiStatus
+    /**
+     * Who the entry comes from. Saved entries don't record whether Muse drafted a field, so the
+     * default makes no AI claim; AI styling is kept for Muse's unsaved drafts.
+     */
     eyebrow?: string
     /** Path prefix for related-concept links: "/catalog/" (own vault) or "/community/". */
     relatedLinkBase?: string
@@ -26,7 +30,7 @@ const props = withDefaults(
     facts: () => [],
     related: () => [],
     status: undefined,
-    eyebrow: 'Catalog entry · AI-assisted, reviewed by you',
+    eyebrow: 'Catalog entry · describes the source',
     relatedLinkBase: '/catalog/',
   },
 )
@@ -42,9 +46,9 @@ const hasMetadata = computed(
 </script>
 
 <template>
-  <section class="ai-metadata surface surface--ai" aria-labelledby="ai-metadata-heading">
+  <section class="ai-metadata surface" aria-labelledby="ai-metadata-heading">
     <div class="ai-metadata__header">
-      <span class="ai-metadata__icon"><CommonAppIcon name="sparkle" :size="18" /></span>
+      <span class="ai-metadata__icon"><CommonAppIcon name="catalog" :size="18" /></span>
       <div>
         <p class="eyebrow">{{ eyebrow }}</p>
         <h2 id="ai-metadata-heading" class="ai-metadata__title">Catalog entry</h2>
@@ -117,7 +121,7 @@ const hasMetadata = computed(
   width: 2.25rem;
   height: 2.25rem;
   border-radius: var(--radius-md);
-  background: var(--color-terracotta-strong);
+  background: var(--color-archive-brown);
   color: var(--color-ivory);
 }
 .ai-metadata__title {
@@ -142,8 +146,8 @@ const hasMetadata = computed(
   gap: var(--space-3) var(--space-5);
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  background: color-mix(in srgb, var(--bg-surface) 70%, transparent);
-  border: var(--border-width) dashed var(--border-ai);
+  background: var(--bg-sunken);
+  border: var(--border-width) dashed var(--border-default);
   border-radius: var(--radius-md);
 }
 .ai-metadata__fact dt {
@@ -204,6 +208,6 @@ const hasMetadata = computed(
   flex-direction: column;
   gap: var(--space-4);
   padding-top: var(--space-4);
-  border-top: var(--border-width) dashed var(--border-ai);
+  border-top: var(--border-width) dashed var(--border-default);
 }
 </style>
