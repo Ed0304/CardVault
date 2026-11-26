@@ -31,6 +31,13 @@ const envSchema = z.object({
   // 0 (default) uses the connecting address and ignores forwarded headers, so a client cannot
   // choose its own IP. On Railway, set 1: see .env.example.
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+  // Login and registration limits per client IP (TASK-AUTH-025). Failed logins count; a
+  // successful login gives its attempt back. Every registration attempt counts.
+  AUTH_LOGIN_IP_LIMIT: z.coerce.number().int().min(1).max(10_000).default(30),
+  AUTH_LOGIN_ACCOUNT_LIMIT: z.coerce.number().int().min(1).max(1_000).default(10),
+  AUTH_LOGIN_WINDOW_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
+  AUTH_REGISTER_IP_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
+  AUTH_REGISTER_WINDOW_SECONDS: z.coerce.number().int().min(60).max(86_400).default(3_600),
 }).refine(
   (env) => Boolean(env.AI_SERVICE_URL) === Boolean(env.AI_SERVICE_TOKEN),
   { message: "set both or neither", path: ["AI_SERVICE_URL"] },
@@ -85,6 +92,16 @@ export const config = {
     /** Guest Community Catalog reads allowed per client IP in each window. */
     limit: parsed.data.GUEST_COMMUNITY_RATE_LIMIT,
     windowSeconds: parsed.data.GUEST_COMMUNITY_RATE_WINDOW_SECONDS,
+  },
+  authRateLimit: {
+    /** Failed logins per client IP per window, across all accounts. */
+    loginIpLimit: parsed.data.AUTH_LOGIN_IP_LIMIT,
+    /** Failed logins per client IP for one email address per window. */
+    loginAccountLimit: parsed.data.AUTH_LOGIN_ACCOUNT_LIMIT,
+    loginWindowSeconds: parsed.data.AUTH_LOGIN_WINDOW_SECONDS,
+    /** Registration attempts per client IP per window. */
+    registerIpLimit: parsed.data.AUTH_REGISTER_IP_LIMIT,
+    registerWindowSeconds: parsed.data.AUTH_REGISTER_WINDOW_SECONDS,
   },
   /** Express "trust proxy" hop count; decides how req.ip is worked out. */
   trustProxyHops: parsed.data.TRUST_PROXY_HOPS,

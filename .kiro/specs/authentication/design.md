@@ -152,11 +152,48 @@ Response (200): `{ "data": { "user": { ...same user fields } }, "error": null, "
 - `app/middleware/auth.ts` does not exist (REQ-AUTH-007). Login always navigates to `/catalog` instead of the
   originally requested page.
 
+### D6. Login and registration rate limits (TASK-AUTH-025)
+
+**Code:** `src/middleware/authRateLimit.ts`, run after `validateBody` (so the email is normalized) and before any password hashing.
+
+**Login, `POST /api/auth/login`:**
+- Defaults: 30 failed logins per IP, and 10 failed logins per IP for one email address, each per 15-minute window.
+- Every attempt is counted when it starts, so a parallel burst can't get past the limit. A 200 response gives the attempt back, so only failures use up the allowance.
+- An attempt refused by the per-email limit does not use up the IP's shared allowance.
+- A refused attempt runs no password check and issues no cookie, even with the correct password.
+
+**Registration, `POST /api/auth/register`:** 10 attempts per IP per hour by default. Every attempt that passes validation counts, including a successful one and a duplicate email, because each one hashes a password and may create an account.
+
+**Over a limit:** 429 `AUTH_RATE_LIMITED` with `Retry-After`, in the usual envelope. Both login limits give the same message, so the response doesn't say which applied. There are no `RateLimit-*` headers on auth routes.
+
+**Not limited:**
+- `POST /refresh` needs a 256-bit random token and runs no password check, and the app calls it on its own. Limiting it could sign out legitimate users.
+- Logout and `/me` are cheap and need no credentials.
+- Malformed requests (400) aren't counted; they never reach Argon2.
+- There is no password reset or email verification.
+
+**Protecting legitimate users:**
+- There is no lockout and nothing permanent. Limits clear at the end of the window.
+- The per-email limit is keyed by IP *and* email, never by email alone. Someone elsewhere sending a victim's address uses up only their own allowance, and the owner still logs in from their own IP.
+- Successful logins don't count, so a busy shared network is limited only by its failures (30 per 15 minutes) and registrations (10 per hour).
+- The trade-off: a password-guessing attack spread across many IPs is slowed per IP, not stopped. Argon2id's cost and the 15-minute window still bound it.
+
+**Privacy:**
+- Known and unknown addresses are counted and answered identically, so a 429 doesn't reveal which accounts exist.
+- Emails are kept only as a SHA-256 digest with a random per-process salt.
+- Nothing from the request body is logged.
+
+**Client IP:** `req.ip` under `TRUST_PROXY_HOPS`, the same rule as the guest Community limit (discovery design D-DISC-8). Use 0 locally and 1 on Railway.
+
+**Storage:** the existing in-memory fixed window (`lib/rateLimit.ts`, which gains `release`). Counts reset on restart, so a restart also clears an attacker's count, and they're per process. If Express is scaled to several instances, each counts separately. A shared store would be needed then, such as a PostgreSQL table with upserts or Redis. Neither is justified for one instance.
+
+**Configuration:** `AUTH_LOGIN_IP_LIMIT`, `AUTH_LOGIN_ACCOUNT_LIMIT`, `AUTH_LOGIN_WINDOW_SECONDS` (60–86,400), `AUTH_REGISTER_IP_LIMIT`, `AUTH_REGISTER_WINDOW_SECONDS`. Invalid values stop the server at startup, like every other setting.
+
 ## Security notes
 
 - Generic login failure message; the same 401 for wrong email and wrong password.
 - Passwords and tokens are never logged or returned in response bodies.
 - `userId` always comes from the verified token subject, never from request input.
-- No rate limiting, CSRF token beyond `SameSite=Lax`, or refresh tokens exist.
+- Login and registration are rate-limited per client IP (D6). Refresh tokens exist (`migrations/004`, see tech.md). There is no CSRF token beyond `SameSite=Lax`.
 - Deployment-dependent settings that cannot be verified from source (real `JWT_SECRET` strength, `NODE_ENV` in
   production, database TLS, live schema) are not asserted here.

@@ -120,7 +120,11 @@ inclusion: always
   - Per user: AI cataloging and URL ingestion.
   - Per client IP, for guests only: Community Catalog reads, `GUEST_COMMUNITY_RATE_LIMIT` per `GUEST_COMMUNITY_RATE_WINDOW_SECONDS`, 429 `GUEST_RATE_LIMITED`. See discovery design D-DISC-8.
   - The client IP comes from `req.ip` under `TRUST_PROXY_HOPS`. Keep it 0 locally and set it to 1 on Railway. Never set it above the number of proxies you control.
-  - Login and registration have no rate limit yet.
+  - Per client IP, for login and registration (authentication design D6):
+    - Failed logins are limited per IP (`AUTH_LOGIN_IP_LIMIT`, default 30) and per IP and email together (`AUTH_LOGIN_ACCOUNT_LIMIT`, default 10), per `AUTH_LOGIN_WINDOW_SECONDS` (900). Successful logins don't count.
+    - Registrations are limited per IP (`AUTH_REGISTER_IP_LIMIT`, default 10) per `AUTH_REGISTER_WINDOW_SECONDS` (3,600).
+    - Over a limit: 429 `AUTH_RATE_LIMITED`.
+    - Refresh, logout and `/me` are not limited.
 
 ## Testing Expectations
 

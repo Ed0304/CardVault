@@ -11,3 +11,8 @@ process.env.DATABASE_URL =
 process.env.AI_SERVICE_URL = "http://127.0.0.1:59123";
 process.env.AI_SERVICE_TOKEN = "test-ai-service-token-0123456789abcdef";
 process.env.AI_SERVICE_TIMEOUT_MS = "5000";
+// Every test request comes from one address, and suites register and log in many users. These
+// limits are raised so they never interfere; tests/authRateLimit.test.ts sets low limits itself.
+process.env.AUTH_LOGIN_IP_LIMIT = "10000";
+process.env.AUTH_LOGIN_ACCOUNT_LIMIT = "1000";
+process.env.AUTH_REGISTER_IP_LIMIT = "10000";

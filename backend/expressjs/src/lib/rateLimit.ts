@@ -38,8 +38,19 @@ export function createRateLimiter(options: { windowMs: number; limit: () => numb
     return { allowed: true, retryAfterSeconds, limit, remaining: Math.max(0, limit - window.count) };
   }
 
+  /**
+   * Gives back one request counted in the current window, e.g. when an attempt turned out to be
+   * one the policy does not count (a successful login). Does nothing once the window has ended.
+   */
+  function release(key: string, now = Date.now()): void {
+    const window = windows.get(key);
+    if (!window || now - window.startedAt >= options.windowMs || window.count === 0) return;
+    window.count -= 1;
+  }
+
   return {
     consume,
+    release,
     reset: () => {
       windows.clear();
       lastSweep = 0;

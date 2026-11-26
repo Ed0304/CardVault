@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getApiStatus } from '~/services/api'
+import { getApiErrorMessage, getApiStatus } from '~/services/api'
 import { safeRedirectPath } from '~/utils/navigation'
 
 definePageMeta({ layout: 'auth', guestOnly: true })
@@ -28,7 +28,9 @@ const onSubmit = async () => {
     error.value =
       status === 401 || status === 400
         ? 'Invalid credentials.'
-        : "CardVault couldn't reach the server. Please try again in a moment."
+        : status === 429
+          ? getApiErrorMessage(err, 'Too many login attempts. Please wait a few minutes and try again.')
+          : "CardVault couldn't reach the server. Please try again in a moment."
   } finally {
     isSubmitting.value = false
   }
