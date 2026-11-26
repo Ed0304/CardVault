@@ -18,7 +18,13 @@ const registerToSave = computed(() => loginPath(route.fullPath, 'register'))
 // Logging out, or a session ending, changes what the viewer may do: reload the card.
 watch(isAuthenticated, () => fetchCard(id.value))
 
-onMounted(() => fetchCard(id.value))
+// False until the first request has finished, so the page shows "loading" instead of a blank page.
+const loaded = ref(false)
+const load = async () => {
+  await fetchCard(id.value)
+  loaded.value = true
+}
+onMounted(load)
 watch(id, (value) => {
   justSaved.value = false
   fetchCard(value)
@@ -36,8 +42,11 @@ const onSave = async () => {
       Community Catalog
     </NuxtLink>
 
-    <CommonLoadingState v-if="isLoading" label="Loading card…" />
-    <CommonAppAlert v-else-if="error" title="Couldn't open this card">{{ error }}</CommonAppAlert>
+    <CommonLoadingState v-if="isLoading || !loaded" label="Loading card…" />
+    <CommonAppAlert v-else-if="error" title="Couldn't open this card">
+      {{ error }}
+      <CommonAppButton variant="ghost" size="sm" @click="load">Try again</CommonAppButton>
+    </CommonAppAlert>
 
     <article v-else-if="card" class="detail">
       <CommonPageHeading

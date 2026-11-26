@@ -19,7 +19,13 @@ const pageCount = computed(() => Math.max(1, Math.ceil(total.value / COMMUNITY_P
 
 const query = ref(activeQuery.value)
 
-const load = () => fetchCards({ q: activeQuery.value, page: page.value })
+// False until the first request has finished, on the server and in the browser alike, so the page
+// shows "loading" first and never claims the catalog is empty before it knows.
+const loaded = ref(false)
+const load = async () => {
+  await fetchCards({ q: activeQuery.value, page: page.value })
+  loaded.value = true
+}
 onMounted(load)
 watch(() => [activeQuery.value, page.value], load)
 watch(activeQuery, (value) => {
@@ -52,15 +58,16 @@ const goToPage = (n: number) =>
         @search="onSearch"
       />
 
-      <p v-if="activeQuery && !isLoading && !error" class="community__summary">
+      <p v-if="activeQuery && loaded && !isLoading && !error" class="community__summary">
         {{ total === 1 ? '1 card matches' : `${total} cards match` }}
         <strong>“{{ activeQuery }}”</strong>.
         <NuxtLink to="/community">Clear search</NuxtLink>
       </p>
 
-      <CommonLoadingState v-if="isLoading" variant="cards" label="Loading the Community Catalog…" />
+      <CommonLoadingState v-if="isLoading || !loaded" variant="cards" label="Loading the Community Catalog…" />
       <CommonAppAlert v-else-if="error" title="The Community Catalog didn't load">
         {{ error }}
+        <CommonAppButton variant="ghost" size="sm" @click="load">Try again</CommonAppButton>
       </CommonAppAlert>
 
       <ul v-else-if="cards.length" class="community__grid">
@@ -85,7 +92,7 @@ const goToPage = (n: number) =>
         <CommonAppButton v-else to="/register" variant="secondary">Create an account to catalog your own</CommonAppButton>
       </CommonEmptyState>
 
-      <nav v-if="!isLoading && !error && pageCount > 1" class="community__pager" aria-label="Pages">
+      <nav v-if="loaded && !isLoading && !error && pageCount > 1" class="community__pager" aria-label="Pages">
         <CommonAppButton variant="secondary" size="sm" :disabled="page <= 1" @click="goToPage(page - 1)">
           <CommonAppIcon name="arrow-left" :size="16" />
           Previous

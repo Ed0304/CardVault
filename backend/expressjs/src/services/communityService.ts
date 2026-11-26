@@ -112,7 +112,8 @@ export function toPublicSummary(row: PublicRow): PublicCardSummary {
 }
 
 /**
- * Published cards, newest published first. With `q`, a case-insensitive keyword search over the
+ * Published cards. Browsing spreads members across the first page (one card per member per
+ * round); search results are newest published first. With `q`, a case-insensitive keyword search over the
  * public fields only: title, summary, subjects and keywords, and the source text only where the
  * author shared it (otherwise a search could reveal words from unshared text).
  */
@@ -141,11 +142,20 @@ export async function listPublicCards(query: ListPublicCardsQuery): Promise<Publ
   );
   const total = Number(countResult.rows[0]?.total ?? 0);
 
+  // Search results are newest first. Browsing (no `q`) takes one card per member per round, so
+  // the first screen shows many members rather than whoever published most recently. Within a
+  // round, cards with a catalog title come before untitled ones, then newest first. The id
+  // tie-breaks keep the order total, so pages never overlap or skip.
+  const order = query.q
+    ? "c.published_at DESC, c.id DESC"
+    : `row_number() OVER (PARTITION BY c.user_id ORDER BY c.published_at DESC, c.id DESC),
+       (c.catalog_title IS NULL), c.published_at DESC, c.id DESC`;
+
   const pageParams = [...params, query.pageSize, (query.page - 1) * query.pageSize];
   const rows = await pool.query<PublicRow>(
     `SELECT ${PUBLIC_COLUMNS} ${FROM_PUBLIC}
      ${where}
-     ORDER BY c.published_at DESC, c.id DESC
+     ORDER BY ${order}
      LIMIT $${pageParams.length - 1} OFFSET $${pageParams.length}`,
     pageParams,
   );

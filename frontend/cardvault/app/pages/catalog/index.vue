@@ -25,8 +25,13 @@ const filterLabel = computed(() => {
   return name ? `the tag “${name}”` : 'this tag'
 })
 
-const load = () =>
-  fetchCards({ q: activeQuery.value || undefined, collectionId: collectionId.value, tagId: tagId.value })
+// False until the first request has finished, so a first visit shows "loading" rather than
+// briefly claiming the vault is empty.
+const loaded = ref(false)
+const load = async () => {
+  await fetchCards({ q: activeQuery.value || undefined, collectionId: collectionId.value, tagId: tagId.value })
+  loaded.value = true
+}
 
 const onSearch = async (q: string) => {
   activeQuery.value = q.trim()
@@ -82,14 +87,15 @@ const emptyDescription = computed(() => {
         <NuxtLink to="/catalog">Show all cards</NuxtLink>
       </p>
 
-      <p v-if="activeQuery && !isLoading && !error" class="catalog-page__summary">
+      <p v-if="activeQuery && loaded && !isLoading && !error" class="catalog-page__summary">
         Showing cards matching <strong>“{{ activeQuery }}”</strong>.
         <button type="button" class="catalog-page__clear" @click="clearSearch">Clear search</button>
       </p>
 
-      <CommonLoadingState v-if="isLoading" variant="cards" label="Loading your catalog…" />
+      <CommonLoadingState v-if="isLoading || !loaded" variant="cards" label="Loading your catalog…" />
       <CommonAppAlert v-else-if="error" title="Your catalog didn't load">
         {{ error }}
+        <CommonAppButton variant="ghost" size="sm" @click="load">Try again</CommonAppButton>
       </CommonAppAlert>
       <CatalogGrid
         v-else

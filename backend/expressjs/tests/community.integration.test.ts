@@ -222,6 +222,40 @@ describeIntegration("Community Catalog (real database)", () => {
       expect(await communityIds(bob)).not.toContain(first);
     });
 
+    it("browsing shows one card per member per round, titled entries first; search stays newest first", async () => {
+      // Bob publishes first, then Alice publishes three newer cards.
+      const b1 = await newCard(bob, { title: `Spread b1 ${RUN}` });
+      await publish(bob, b1);
+      const a1 = await newCard(alice, { title: `Spread a1 ${RUN}` });
+      await publish(alice, a1);
+      const a2 = await newCard(alice, { title: `Spread a2 ${RUN}` });
+      await publish(alice, a2);
+      const a3 = await newCard(alice, { title: `Spread a3 ${RUN}` });
+      await publish(alice, a3);
+      // Bob's card has a catalog title; Alice's are untitled.
+      expect((await as(bob).patch(`/api/cards/${b1}/ai-metadata`, { catalogTitle: `Spread titled ${RUN}` })).status).toBe(200);
+
+      // Walk the whole browse order (other data may share the database, so compare positions).
+      const browse: string[] = [];
+      for (let page = 1; ; page++) {
+        const res = await request(app).get(`/api/community/cards?pageSize=50&page=${page}`);
+        expect(res.status).toBe(200);
+        browse.push(...(res.body.data.items as { id: string }[]).map((item) => item.id));
+        if (browse.length >= res.body.data.total || res.body.data.items.length === 0) break;
+      }
+      expect(new Set(browse).size).toBe(browse.length);
+      const at = (id: string) => browse.indexOf(id);
+      // Round 1: Bob's titled card, then Alice's newest; then Alice's older cards in later rounds.
+      expect(at(b1)).toBeLessThan(at(a3));
+      expect(at(a3)).toBeLessThan(at(a2));
+      expect(at(a2)).toBeLessThan(at(a1));
+
+      // Search keeps plain newest-first order.
+      const searched = await communityIds(alice, `Spread`);
+      const mine = searched.filter((id) => [a1, a2, a3, b1].includes(id));
+      expect(mine).toEqual([a3, a2, a1, b1]);
+    });
+
     it("returns only the approved public fields", async () => {
       const collection = await as(alice).post("/api/collections", { name: `Secret shelf ${RUN}` });
       const tag = await as(alice).post("/api/tags", { name: `secret-tag-${RUN}` });

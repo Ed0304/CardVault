@@ -115,7 +115,8 @@ CardVault has three connected experiences: **My Vault** (the user's own cards, p
   - AC-CAT-011-4: Unpublishing sets `PRIVATE`, `publishedAt: null` and `shareSourceText: false`.
 
 ### REQ-CAT-012: Community Catalog Listing and Search
-- Anyone can list published cards, including guests without an account (Discovery REQ-DISC-001), newest published first, paginated like REQ-CAT-003 (default 20, max 50), with the total.
+- Anyone can list published cards, including guests without an account (Discovery REQ-DISC-001), paginated like REQ-CAT-003 (default 20, max 50), with the total.
+- Browsing order (no `q`): one card per member per round, so the first page shows many members rather than whoever published most recently. Within a round, cards with a catalog title come first, then newest published first. The order is total (ties broken by id), so pages never overlap. Search results (`q`) are newest published first. (Changed 2026-11-25; until then browsing was also newest first.)
 - An optional keyword `q` (max 500 characters) matches case-insensitively against the title, summary, subjects and keywords, and against the source text only where the owner shared it. LIKE wildcards in `q` match literally.
 - Private cards never appear and are never counted.
 - Requests without a valid session are answered as for a guest: the same public fields. (Superseded: until the Discovery milestone they returned 401.)

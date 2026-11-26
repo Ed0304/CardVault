@@ -70,7 +70,7 @@ recommendations are built from).
   - "Shares “<heading>” with “<your card>” in your vault."
   - "“<your card>” in your vault lists this as a related concept." / "Lists “<your card>”, a card in your vault, as a related concept."
   - "Close to your interest in <topic>: both touch on <heading>."
-  - "Explore something new: <heading>."
+  - "Outside the topics you follow: <heading>." (shown under the label "Something new", so the reason doesn't repeat it)
 - Generic reasons such as "Recommended by AI" are not used.
 
 ### REQ-DISC-011: Relevance and Discovery

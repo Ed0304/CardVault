@@ -277,7 +277,9 @@ describe("rankRecommendations", () => {
     expect(result).toHaveLength(6);
     for (const r of result) {
       expect(r.reason.kind).toBe("EXPLORE");
-      expect(r.reason.text).toMatch(/^Explore something new: \S/);
+      expect(r.reason.text).toMatch(/^Outside the topics you follow: \S/);
+      // The card label is "Something new"; the reason must not repeat it.
+      expect(r.reason.text).not.toMatch(/something new/i);
     }
     // One card per subject while there are enough subjects to go round.
     const subjects = result.map((r) => r.reason.topics[0]);

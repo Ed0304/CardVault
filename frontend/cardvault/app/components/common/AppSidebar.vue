@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { primaryNavLinks } from '~/utils/navigation'
+import { primaryNavLinks, type NavLink } from '~/utils/navigation'
 
 const route = useRoute()
+const { isAuthenticated } = useAuth()
+
+/** Signed-in-only links show a lock to signed-out visitors, as in the header; following one leads to login. */
+const isLocked = (link: NavLink) => link.requiresAuth && !isAuthenticated.value
 </script>
 
 <template>
@@ -17,6 +21,10 @@ const route = useRoute()
           >
             <CommonAppIcon :name="link.icon" :size="18" />
             {{ link.label }}
+            <span v-if="isLocked(link)" class="app-sidebar__lock">
+              <CommonAppIcon name="lock" :size="14" />
+              <span class="visually-hidden">(log in required)</span>
+            </span>
           </NuxtLink>
         </li>
       </ul>
@@ -64,6 +72,11 @@ const route = useRoute()
   transition:
     background-color var(--transition-fast),
     color var(--transition-fast);
+}
+.app-sidebar__lock {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--text-muted);
 }
 .app-sidebar__link:hover {
   background: var(--bg-hover);

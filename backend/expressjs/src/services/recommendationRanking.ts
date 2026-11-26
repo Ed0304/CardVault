@@ -376,8 +376,9 @@ export function rankRecommendations(
       score: 0,
       topicKey: heading ? normalizeTopic(heading) : `card:${p.candidate.id}`,
       reason: heading
-        ? { kind: "EXPLORE", text: `Explore something new: ${heading}.`, topics: [heading] }
-        : { kind: "EXPLORE", text: "Explore something new from the Community Catalog.", topics: [] },
+        // The card's label already says "Something new", so the reason names the topic instead.
+        ? { kind: "EXPLORE", text: `Outside the topics you follow: ${heading}.`, topics: [heading] }
+        : { kind: "EXPLORE", text: "Outside the topics you follow.", topics: [] },
     });
   }
 

@@ -132,7 +132,7 @@ ALTER TABLE knowledge_cards ADD COLUMN IF NOT EXISTS embedding vector(<N>);
 | DELETE | /api/cards/:id | Delete a card |
 | PATCH | /api/cards/:id/collection | Put the card in one of the user's collections (`{ collectionId }`), or remove it (`{ collectionId: null }`) |
 | PATCH | /api/cards/:id/visibility | Publish (`{ visibility: "PUBLIC", shareSourceText: boolean }`) or unpublish (`{ visibility: "PRIVATE" }`) an owned card. 409 `SAVED_COPY_NOT_PUBLISHABLE` for saved copies |
-| GET | /api/community/cards | Published cards, newest published first (`q`, `page`, `pageSize`) |
+| GET | /api/community/cards | Published cards (`q`, `page`, `pageSize`). Browsing: one card per member per round, titled entries first within a round, then newest. Search: newest published first |
 | GET | /api/community/cards/:id | One published card (public fields and `viewer`) |
 | POST | /api/community/cards/:id/save | Save an independent private copy (201). 404 if not published; 409 `CANNOT_SAVE_OWN_CARD` or `CARD_ALREADY_SAVED` |
 | GET | /api/collections | List user's collections |
