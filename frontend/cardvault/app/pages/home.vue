@@ -46,6 +46,7 @@ const today = computed(() => (shelf.value ? formatDate(`${shelf.value.date}T12:0
             From the Community Catalog<template v-if="today"> · {{ today }}</template>
           </p>
           <h2 id="today-heading" class="home__shelf-title">Recommended cards for today</h2>
+          <p class="home__shelf-hint">Each card says why it was picked for you.</p>
         </div>
         <NuxtLink to="/settings" class="home__tune">
           <CommonAppIcon name="sliders" :size="16" />
@@ -143,6 +144,11 @@ const today = computed(() => (shelf.value ? formatDate(`${shelf.value.date}T12:0
 }
 .home__shelf-title {
   font-size: var(--text-2xl);
+}
+.home__shelf-hint {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 .home__tune {
   display: inline-flex;

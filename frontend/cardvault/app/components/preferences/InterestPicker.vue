@@ -211,7 +211,10 @@ const PRIORITIES: { value: RecommendationPriority; label: string; hint: string }
           {{ isDirty ? 'Unsaved changes. Nothing changes until you save.' : 'All changes saved.' }}
         </p>
       </div>
-      <CommonAppButton type="submit" :loading="isSaving">{{ submitLabel }}</CommonAppButton>
+      <!-- In Settings there is nothing to save until something changes. -->
+      <CommonAppButton type="submit" :loading="isSaving" :disabled="showPriority && !isDirty">
+        {{ submitLabel }}
+      </CommonAppButton>
     </div>
   </form>
 </template>

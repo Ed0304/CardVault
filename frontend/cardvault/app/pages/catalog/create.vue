@@ -37,7 +37,7 @@ const onSubmit = async () => {
   <section>
     <CommonPageHeading
       title="New card"
-      description="Capture a source: paste text, or give the address of a public web page. Saving creates a private card that keeps the source as it is. Its catalog entry comes next, on the card's page."
+      description="Save a source as a private card. Its catalog entry comes next, on the card's page."
     />
 
     <div class="create">
@@ -60,12 +60,12 @@ const onSubmit = async () => {
           <CommonAppInput
             key="text"
             v-model="sourceText"
-            label="Content"
+            label="Source text"
             multiline
             required
-            rows="12"
+            rows="8"
             maxlength="100000"
-            hint="Saved exactly as written. The original is never modified."
+            hint="Up to 100,000 characters, saved exactly as written and never modified."
           />
           <CommonAppInput
             key="title"
@@ -73,7 +73,7 @@ const onSubmit = async () => {
             label="Title"
             optional
             maxlength="300"
-            hint="Leave empty to use the first line of the content."
+            hint="Leave empty to use the first line of the source text."
           />
           <CommonAppInput
             key="text-url"
@@ -94,7 +94,7 @@ const onSubmit = async () => {
           required
           maxlength="2048"
           placeholder="https://"
-          hint="A public http or https web page. CardVault reads it once and saves its readable text and details, not the page's HTML. Pages that need a login or JavaScript to show their text, and sites that block automated access, can't be read; paste the text instead."
+          hint="A public http or https web page. CardVault reads it once and saves its readable text (the first 100,000 characters of a long page) and details, not the page's HTML. Pages that need a login or JavaScript to show their text, and sites that block automated access, can't be read; paste the text instead."
         />
 
         <CommonAppAlert v-if="error" title="Couldn't save the card">
@@ -115,26 +115,19 @@ const onSubmit = async () => {
         </div>
       </form>
 
-      <aside class="create__aside surface surface--ai" aria-labelledby="next-title">
+      <aside class="create__aside surface surface--sunken" aria-labelledby="next-title">
         <div class="create__aside-header">
-          <span class="create__aside-icon"><CommonAppIcon name="sparkle" :size="18" /></span>
+          <span class="create__aside-icon"><CommonAppIcon name="info" :size="18" /></span>
           <h2 id="next-title">What happens next</h2>
         </div>
         <ol class="create__steps">
+          <li><strong>Save.</strong> The source is stored as is, and your new card opens. Muse isn't used.</li>
           <li>
-            <strong>Save.</strong> CardVault stores the source and opens your new card. Pasted text
-            can be up to 100,000 characters; a longer web page keeps its first 100,000. Muse is
-            not involved.
+            <strong>Catalog.</strong> On the card, write its catalog entry, or choose “Catalog with
+            Muse” for suggestions.
           </li>
           <li>
-            <strong>Catalog.</strong> On the card, write its catalog entry yourself, or choose
-            “Catalog with Muse” for suggested details: a title, description, facts, subject
-            headings, keywords and related concepts.
-          </li>
-          <li>
-            <strong>Review.</strong> Muse's suggestions arrive as a draft, marked as AI-generated.
-            Edit them, then save them to the card or discard them. The source itself is never
-            changed.
+            <strong>Review.</strong> Edit Muse's draft, then save or discard it. The source never changes.
           </li>
         </ol>
         <p class="create__aside-note">
@@ -215,11 +208,12 @@ const onSubmit = async () => {
   outline-offset: 2px;
 }
 
-/* Aside */
+/* Aside. Below 64rem it comes first, so the flow is visible before the form's large text field. */
 .create__aside {
+  order: -1;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 .create__aside-header {
   display: flex;
@@ -235,13 +229,16 @@ const onSubmit = async () => {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: var(--radius-md);
-  background: var(--color-terracotta-strong);
-  color: var(--color-ivory);
+  background: var(--bg-surface);
+  border: var(--border-width) solid var(--border-subtle);
+  color: var(--color-archive-brown);
 }
 .create__steps {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   padding-left: var(--space-5);
   color: var(--text-secondary);
 }
@@ -264,6 +261,9 @@ const onSubmit = async () => {
   .create {
     grid-template-columns: minmax(0, 1fr) 20rem;
     gap: var(--space-8);
+  }
+  .create__aside {
+    order: 0;
   }
 }
 </style>

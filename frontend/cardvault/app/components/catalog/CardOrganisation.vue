@@ -128,7 +128,9 @@ const onRemoveTag = async (tagId: string, name: string) => {
       <p class="organise__small">Type an existing tag or a new one; new tags are created for you.</p>
     </div>
 
-    <p class="visually-hidden" aria-live="polite">{{ notice }}</p>
+    <p class="organise__notice" aria-live="polite">
+      <template v-if="notice"><CommonAppIcon name="check" :size="14" /> {{ notice }}</template>
+    </p>
     <CommonAppAlert v-if="error || tagError">{{ error || tagError }}</CommonAppAlert>
   </section>
 </template>
@@ -166,6 +168,16 @@ const onRemoveTag = async (tagId: string, name: string) => {
 .organise__small {
   font-size: var(--text-xs);
   color: var(--text-muted);
+}
+.organise__notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--success-text);
+}
+.organise__notice:empty {
+  display: none;
 }
 .organise__field {
   display: flex;

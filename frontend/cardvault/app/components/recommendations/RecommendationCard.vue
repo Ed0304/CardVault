@@ -41,21 +41,17 @@ const isDiscovery = computed(() => ['ADJACENT', 'EXPLORE'].includes(props.item.r
       <h3 class="rcard__title">
         <NuxtLink :to="`/community/${card.id}`" class="rcard__link">{{ displayTitle(card) }}</NuxtLink>
       </h3>
+      <!-- Provenance on one compact line: who cataloged it, and where the source lives. -->
+      <p class="rcard__provenance">
+        <span>by {{ card.author.username }}</span>
+        <template v-if="host"><span aria-hidden="true">·</span><span class="rcard__host">{{ host }}</span></template>
+      </p>
       <p class="rcard__reason">
-        <span class="rcard__reason-label">Why it's here</span>
-        {{ item.reason.text }}
+        <span class="visually-hidden">Why it's here: </span>{{ item.reason.text }}
       </p>
       <p v-if="card.aiSummary" class="rcard__summary">{{ card.aiSummary }}</p>
       <p v-else class="rcard__summary text-muted">No catalog description yet. Open the card to read more.</p>
     </div>
-
-    <footer class="rcard__footer">
-      <span class="rcard__author">
-        <CommonAppIcon name="user" :size="14" />
-        Cataloged by {{ card.author.username }}
-      </span>
-      <span v-if="host" class="rcard__host">{{ host }}</span>
-    </footer>
   </article>
 </template>
 
@@ -161,33 +157,16 @@ const isDiscovery = computed(() => ['ADJACENT', 'EXPLORE'].includes(props.item.r
 .rcard--discovery .rcard__reason {
   border-left-color: var(--color-terracotta);
 }
-.rcard__reason-label {
-  display: block;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-.rcard__footer {
+.rcard__provenance {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-3);
-  padding: var(--space-3) var(--card-padding);
-  border-top: var(--border-width) dashed var(--border-default);
+  gap: 0 var(--space-1);
+  margin-top: calc(-1 * var(--space-1));
   font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-.rcard__author {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
+  color: var(--text-muted);
 }
 .rcard__host {
   font-family: var(--font-mono);
-  color: var(--text-muted);
   overflow-wrap: anywhere;
 }
 </style>

@@ -63,7 +63,7 @@ const emptyDescription = computed(() => {
   <section>
     <CommonPageHeading
       title="My Vault"
-      description="Your private catalog: each card keeps the source you saved and a catalog entry that describes it. Only you can see your cards unless you publish one."
+      description="Your private catalog. Only you can see your cards unless you publish one."
     >
       <template #actions>
         <CommonAppButton to="/catalog/create">

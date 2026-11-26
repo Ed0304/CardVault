@@ -27,30 +27,33 @@ const isFirstRun = computed(() => props.showCreateAction && !props.emptyTitle)
     </li>
   </ul>
 
-  <div v-else-if="isFirstRun" class="vault-empty">
-    <CommonEmptyState
-      title="Your vault is empty"
-      description="Save something worth keeping: paste text, or give the address of a public web page. Each card keeps that source and a catalog entry you can fill in with Muse's help."
-      icon="catalog"
-    >
-      <div class="vault-empty__actions">
-        <CommonAppButton to="/catalog/create">
-          <CommonAppIcon name="plus" :size="18" />
-          Add your first card
-        </CommonAppButton>
-        <CommonAppButton to="/community" variant="secondary">
-          <CommonAppIcon name="globe" :size="18" />
-          Browse the Community Catalog
-        </CommonAppButton>
-      </div>
-    </CommonEmptyState>
+  <CommonEmptyState
+    v-else-if="isFirstRun"
+    title="Your vault is empty"
+    description="Save text or a public web page. Each card keeps that source beside a catalog entry describing it."
+    icon="catalog"
+  >
+    <div class="vault-empty__actions">
+      <CommonAppButton to="/catalog/create">
+        <CommonAppIcon name="plus" :size="18" />
+        Add your first card
+      </CommonAppButton>
+      <CommonAppButton to="/community" variant="secondary">
+        <CommonAppIcon name="globe" :size="18" />
+        Browse the Community Catalog
+      </CommonAppButton>
+    </div>
 
     <!-- A static picture of a card, labelled as an example. It is not a card in your vault. -->
-    <figure class="vault-empty__example" aria-labelledby="example-caption">
-      <figcaption id="example-caption" class="vault-empty__example-label">
+    <details class="vault-empty__example">
+      <summary class="vault-empty__summary">
+        <CommonAppIcon name="arrow-right" :size="14" class="vault-empty__chevron" />
+        See what a card holds
+      </summary>
+      <p class="vault-empty__example-label">
         <CommonAppBadge variant="outline">Example only</CommonAppBadge>
-        What a card holds
-      </figcaption>
+        Not a card in your vault
+      </p>
       <dl class="example-card">
         <div class="example-card__part">
           <dt class="mono">Source</dt>
@@ -65,8 +68,8 @@ const isFirstRun = computed(() => props.showCreateAction && !props.emptyTitle)
           <dd>Private to you, never shared or sent to Muse.</dd>
         </div>
       </dl>
-    </figure>
-  </div>
+    </details>
+  </CommonEmptyState>
 
   <CommonEmptyState
     v-else
@@ -94,35 +97,61 @@ const isFirstRun = computed(() => props.showCreateAction && !props.emptyTitle)
   }
 }
 
-.vault-empty {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-5);
-}
 .vault-empty__actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--space-2);
 }
+/* The example sits under the actions, inside the empty state, so it needs no scrolling to find. */
 .vault-empty__example {
-  margin: 0;
+  width: min(100%, 32rem);
+  margin: var(--space-4) auto 0;
+  text-align: left;
+}
+.vault-empty__summary {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-height-sm);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-link);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.vault-empty__summary::-webkit-details-marker {
+  display: none;
+}
+.vault-empty__chevron {
+  transition: transform var(--transition-fast);
+}
+.vault-empty__example[open] .vault-empty__chevron {
+  transform: rotate(90deg);
+}
+.vault-empty__summary:hover {
+  background: var(--bg-hover);
+}
+.vault-empty__summary:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 .vault-empty__example-label {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--text-secondary);
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 .example-card {
   display: grid;
-  margin: 0;
+  margin: var(--space-2) 0 0;
   background: var(--bg-surface);
   border: var(--border-width) solid var(--border-subtle);
   border-top: 3px solid var(--color-antique-beige);
@@ -143,11 +172,5 @@ const isFirstRun = computed(() => props.showCreateAction && !props.emptyTitle)
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
   color: var(--text-secondary);
-}
-@media (min-width: 64rem) {
-  .vault-empty {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: start;
-  }
 }
 </style>

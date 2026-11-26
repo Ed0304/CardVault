@@ -45,6 +45,14 @@
   - The Collections page's "add from a card's page" and its filter links are now true.
   - Added `HowItWorks.vue` (Home), a short "what CardVault is" on welcome, an empty-vault example labelled "Example only" (static, no data), clearer New Card steps, "Why it's here" on recommendations, and save-state and topic-matching notes in Settings.
   - Verified on 2026-11-25 by `vue-tsc`, the production build, and a headless-Chrome check at 375 and 1280 px against `cardvault_test` with throwaway users (31 checks: no horizontal overflow on 9 pages, plus behaviour checks).
+- [x] **TASK-CAT-041** UX polish pass:
+  - Empty vault: the example is a "See what a card holds" disclosure inside the empty state, on the first phone screen.
+  - Recommendation cards: provenance on one line under the title; no footer row; no repeated "Why it's here" label (kept for screen readers, plus one shelf-level line).
+  - New Card: "Source text" label; shorter steps, shown before the form on phones; no AI styling on the save step.
+  - Settings: "Save preferences" is disabled until something changes.
+  - Muse review: when the card already has an entry, it warns that saving replaces it and offers "Compare with your saved entry".
+  - Collection and tags panel: visible confirmations.
+  - Verified on 2026-11-25 by `vue-tsc`, the production build, and 40 headless-Chrome checks against `cardvault_test` with throwaway users.
 
 ## Community Catalog (REQ-CAT-011 to REQ-CAT-014)
 

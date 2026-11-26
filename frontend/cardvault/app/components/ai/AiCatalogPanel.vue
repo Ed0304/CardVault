@@ -134,6 +134,27 @@ const onSaveEdit = async (payload: Required<UpdateAiMetadataPayload>) => {
     <CommonAppAlert v-if="draft.truncated" variant="info">
       This card is long, so Muse cataloged its opening part only.
     </CommonAppAlert>
+    <!-- Saving the draft writes every field, so show what it would replace. -->
+    <template v-if="hasDetails">
+      <CommonAppAlert variant="info">
+        This card already has a catalog entry. Saving replaces it with what's in the form below;
+        discarding keeps it as it is.
+      </CommonAppAlert>
+      <details class="review__saved">
+        <summary class="review__saved-summary">
+          <CommonAppIcon name="arrow-right" :size="14" class="review__chevron" />
+          Compare with your saved entry
+        </summary>
+        <AiMetadata
+          eyebrow="Your saved entry · unchanged until you save"
+          :summary="card.aiSummary"
+          :facts="card.aiFacts"
+          :subjects="card.aiSubjects"
+          :keywords="card.aiKeywords"
+          :related="card.aiRelated"
+        />
+      </details>
+    </template>
     <CommonAppAlert v-if="card.visibility === 'PUBLIC'" variant="warning">
       This card is published. Saved details will appear on its public page.
     </CommonAppAlert>
@@ -224,6 +245,41 @@ const onSaveEdit = async (payload: Required<UpdateAiMetadataPayload>) => {
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
   color: var(--text-secondary);
+}
+.review__saved {
+  display: flex;
+  flex-direction: column;
+}
+.review__saved-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height-sm);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--text-link);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.review__saved-summary::-webkit-details-marker {
+  display: none;
+}
+.review__saved-summary:hover {
+  background: var(--bg-hover);
+}
+.review__saved-summary:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+.review__chevron {
+  transition: transform var(--transition-fast);
+}
+.review__saved[open] .review__chevron {
+  transform: rotate(90deg);
+}
+.review__saved[open] > :deep(.ai-metadata) {
+  margin-top: var(--space-3);
 }
 .review__meta {
   font-size: var(--text-xs);
