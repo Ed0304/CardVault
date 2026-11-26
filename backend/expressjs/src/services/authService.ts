@@ -1,6 +1,6 @@
 import { AppError } from "../lib/errors.js";
 import { signAccessToken } from "../lib/jwt.js";
-import { getDummyHash, hashPassword, verifyPassword } from "../lib/password.js";
+import { getDummyHash, hashPassword, isUsablePasswordHash, verifyPassword } from "../lib/password.js";
 import type { LoginInput, RegisterInput } from "../schemas/auth.schemas.js";
 import * as userService from "./userService.js";
 import type { UserRecord } from "./userService.js";
@@ -117,11 +117,13 @@ export async function registerUser(input: RegisterInput): Promise<AuthResult> {
 export async function loginUser(input: LoginInput): Promise<AuthResult> {
   const user = await userService.findUserByEmail(input.email);
 
-  // Always run one Argon2 verification, even for unknown emails.
-  const hash = user ? user.passwordHash : await getDummyHash();
+  // Always run one Argon2 verification, even for unknown emails and for accounts that cannot
+  // log in (no usable hash, e.g. seed catalog authors), so all three answer alike.
+  const canLogIn = user !== null && isUsablePasswordHash(user.passwordHash);
+  const hash = canLogIn ? user.passwordHash : await getDummyHash();
   const passwordMatches = await verifyPassword(hash, input.password);
 
-  if (!user || !passwordMatches) {
+  if (!user || !canLogIn || !passwordMatches) {
     throw new AppError(
       401,
       "INVALID_CREDENTIALS",

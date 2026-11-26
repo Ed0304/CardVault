@@ -269,6 +269,30 @@ describe("POST /api/auth/login", () => {
     expect(res.body.message).toBe("Invalid email or password");
   });
 
+  it("never logs in an account marked as no-login, whatever the password, with the usual 401", async () => {
+    const { NO_LOGIN_PASSWORD_HASH } = await import("../src/lib/password.js");
+    users.push({
+      id: crypto.randomUUID(),
+      username: "seedauthor",
+      email: "seedauthor@seed.cardvault.test",
+      passwordHash: NO_LOGIN_PASSWORD_HASH,
+      createdAt: new Date(),
+      onboardingCompleted: true,
+    });
+    const wrongPassword = await request(app)
+      .post("/api/auth/login")
+      .send({ email: validUser.email, password: "WrongPassword123!" });
+    // Including the marker itself, and an empty-looking guess.
+    for (const password of [NO_LOGIN_PASSWORD_HASH, "WrongPassword123!", "x"]) {
+      const res = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "seedauthor@seed.cardvault.test", password });
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual(wrongPassword.body);
+      expect(authCookie(res)).toBeUndefined();
+    }
+  });
+
   it("rejects a nonexistent email with the same 401 response", async () => {
     const wrongPassword = await request(app)
       .post("/api/auth/login")

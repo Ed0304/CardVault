@@ -8,6 +8,17 @@ const ARGON2_OPTIONS = {
   parallelism: 1,
 } as const;
 
+/**
+ * Stored in password_hash for accounts that must never log in, such as seed catalog authors.
+ * It is not an Argon2 hash, so no password can match it.
+ */
+export const NO_LOGIN_PASSWORD_HASH = "!no-login";
+
+/** True when the stored value is an Argon2 hash a password could match. */
+export function isUsablePasswordHash(hash: string): boolean {
+  return hash.startsWith("$argon2");
+}
+
 export function hashPassword(password: string): Promise<string> {
   return argon2.hash(password, ARGON2_OPTIONS);
 }

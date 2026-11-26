@@ -1,15 +1,17 @@
 -- CardVault — Community Catalog seed: 100 test accounts and 100 published cards.
 --
 -- FOR LOCAL DEVELOPMENT AND ISOLATED TEST DATABASES ONLY. Never run this on Railway or any
--- production database: every seed account shares one documented test password.
+-- production database.
 --
 -- What it creates:
---   * 100 accounts, <handle>@seed.cardvault.test (".test" is a reserved TLD, so no real mailbox).
---     Password for every seed account: CardVaultSeed!2026
+--   * 100 author accounts, <handle>@seed.cardvault.test (".test" is a reserved TLD, so no real
+--     mailbox). They exist to own and attribute the cards and CANNOT log in: their
+--     password_hash is the no-login marker '!no-login' (NO_LOGIN_PASSWORD_HASH in
+--     src/lib/password.ts), which is not an Argon2 hash, so no password matches it. To try the
+--     app, register your own account. tests/seedSafety.test.ts keeps credentials out of seeds.
 --   * 100 PUBLIC cards from real, publicly accessible sources. 56 accounts own between one and three
---     cards each; the other 44 accounts own none and are readers.
---   * Recommendation preferences for the 56 card owners (so Home works at once). Reader
---     accounts have none, so logging in as one shows the welcome onboarding.
+--     cards each; the other 44 accounts own none.
+--   * Recommendation preferences for the 56 card owners.
 --
 -- Card content: catalog titles, descriptions, subject headings, keywords, facts and related
 -- concepts are original text written for this seed. No article text is copied: source_text is
@@ -33,7 +35,8 @@
 --   Engineering: 1
 --
 -- Idempotent: accounts are matched by email, cards by (seed owner, source URL), preferences by
--- user. Running it again inserts nothing new. Remove everything with remove_community_catalog_seed.sql.
+-- user. Running it again inserts nothing new (it only disables login on older seed accounts).
+-- Remove everything with remove_community_catalog_seed.sql.
 -- Requires migrations 001 to 008. Run with: npm run db:seed
 
 BEGIN;
@@ -151,14 +154,19 @@ INSERT INTO seed_accounts (n, username, email) VALUES
     (99, 'juniper_librarian', 'juniper_librarian@seed.cardvault.test'),
     (100, 'juniper_wanderer', 'juniper_wanderer@seed.cardvault.test');
 
--- One Argon2id hash (OWASP parameters, as in src/lib/password.ts) of the test password above.
+-- Seed authors cannot log in: '!no-login' is not an Argon2 hash, so no password matches it.
+-- Rerunning also disables login for seed accounts created by an earlier version of this file,
+-- which gave them a shared password. Only the reserved seed domain is ever touched.
 INSERT INTO users (username, email, password_hash, created_at)
 SELECT a.username, a.email,
-       '$argon2id$v=19$m=19456,t=2,p=1$mHQLez111wtBtq9HXTHHRg$Y10Mw1BFwwFaxcDMFZtuIjMaPjQanmDET0V2L6Sll3Q',
+       '!no-login',
        now() - make_interval(days => 45 + (a.n % 30))
   FROM seed_accounts a
  ORDER BY a.n
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (email) DO UPDATE
+   SET password_hash = EXCLUDED.password_hash
+ WHERE users.email LIKE '%@seed.cardvault.test'
+   AND users.password_hash <> EXCLUDED.password_hash;
 
 CREATE TEMP TABLE seed_cards (
     n             INT PRIMARY KEY,

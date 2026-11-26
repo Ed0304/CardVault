@@ -8,8 +8,8 @@ import { pool } from "../src/lib/db.js";
  *   npm run db:seed            # seeds/community_catalog_seed.sql
  *   npm run db:seed:remove     # seeds/remove_community_catalog_seed.sql
  *
- * Refuses to run in production or against a Railway host, because the seed accounts share a
- * published test password.
+ * Refuses to run in production or against a Railway host: seeds are fixture data for local
+ * work. Seed author accounts cannot log in (see the seed file's header).
  */
 const file = process.argv[2] ?? "community_catalog_seed.sql";
 if (!/^[\w.-]+\.sql$/.test(file)) {
